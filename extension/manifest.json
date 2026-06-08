@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "AI Job Pilot ",
+  "version": "1.0",
+  "description": "Intelligent job application assistant with Magic Fill.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:8080/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://localhost/*", "*://*.linkedin.com/*", "*://*.greenhouse.io/*", "*://*.lever.co/*", "*://*.workday.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

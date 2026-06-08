@@ -1,0 +1,7 @@
+/* AI Job Pilot  - Sidebar Styles */
+/* We already injected most styles in content.js, but let's put core resets here */
+#jobc-copilot-sidebar * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}

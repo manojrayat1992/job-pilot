@@ -1,0 +1,35 @@
+# AI Job Pilot
+
+## Build & Run
+
+target/
+*.class
+*.jar
+!target/*.jar
+
+## IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+*.swp
+*.swo
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Environment
+.env
+
+## Logs
+*.log
+logs/
+
+## Uploads
+uploads/
+
+## Node (if frontend added later)
+node_modules/
