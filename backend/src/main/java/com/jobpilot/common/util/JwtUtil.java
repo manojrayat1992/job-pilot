@@ -40,6 +40,7 @@ public class JwtUtil {
     public String generateAccessToken(UUID userId, String email, String role) {
         return buildToken(Map.of(
                 "userId", userId.toString(),
+                "type", "access",
                 "role", role
         ), email, accessTokenExpirationMs);
     }
@@ -80,10 +81,29 @@ public class JwtUtil {
             return true;
         } catch (ExpiredJwtException e) {
             log.debug("JWT expired: {}", e.getMessage());
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             log.debug("Invalid JWT: {}", e.getMessage());
         }
         return false;
+    }
+
+    public boolean isAccessTokenValid(String token) {
+        return hasValidPurpose(token, "access");
+    }
+
+    public boolean isRefreshTokenValid(String token) {
+        return hasValidPurpose(token, "refresh");
+    }
+
+    private boolean hasValidPurpose(String token, String purpose) {
+        try {
+            Claims claims = extractAllClaims(token);
+            UUID.fromString(claims.get("userId", String.class));
+            return purpose.equals(claims.get("type", String.class))
+                    && claims.getSubject() != null && !claims.getSubject().isBlank();
+        } catch (JwtException | IllegalArgumentException | NullPointerException e) {
+            return false;
+        }
     }
 
     public boolean isTokenExpired(String token) {

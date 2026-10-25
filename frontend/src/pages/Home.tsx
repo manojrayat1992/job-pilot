@@ -1,29 +1,23 @@
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import {
-  Briefcase,
-  Sparkles,
-  ShieldCheck,
-  Zap,
-  Search,
-  Brain,
-  ArrowRight,
-  Globe,
-  CheckCircle2,
-  Rocket,
-  Bot,
-  PlayCircle,
-  FileText,
-  FileEdit,
-  Layout,
-  Wand2,
-  TrendingUp,
-  Star,
-  Quote,
-  Check
+ArrowRight,
+Bot,
+Brain,
+Briefcase,
+Check,
+FileEdit,
+FileText,
+Globe,
+Layout,
+Rocket,
+Search,
+Sparkles,
+TrendingUp,
+Wand2,
+Zap
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNavigate } from 'react-router-dom';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -61,11 +55,11 @@ export default function Home() {
 
         <div className="container mx-auto px-4 relative z-10 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold uppercase tracking-widest mb-8">
-            <Zap className="h-3 w-3 fill-current" /> Land Your Dream Job Faster with AI
+            <Zap className="h-3 w-3 fill-current" /> Prepare Your Next Application with AI
           </div>
 
           <h1 className="text-6xl md:text-8xl font-black tracking-tight mb-8 text-slate-900 leading-[1.1]">
-            Land Your Dream <br className="hidden md:block" /> Job Faster with AI.
+            Prepare Your Next <br className="hidden md:block" /> Application with AI.
           </h1>
 
           <p className="text-slate-600 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed font-medium">
@@ -76,32 +70,12 @@ export default function Home() {
             <Button size="lg" className="h-16 px-10 text-lg font-bold rounded-2xl gap-2 w-full sm:w-auto bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-100" onClick={() => navigate('/register')}>
               Start Free <ArrowRight className="h-5 w-5" />
             </Button>
-            <Button size="lg" variant="outline" className="h-16 px-10 text-lg font-bold rounded-2xl border-slate-200 bg-white hover:bg-slate-50 w-full sm:w-auto gap-2 shadow-sm">
-              <PlayCircle className="h-5 w-5" /> Watch Demo
+            <Button asChild size="lg" variant="outline" className="h-16 px-10 text-lg font-bold rounded-2xl border-slate-200 bg-white hover:bg-slate-50 w-full sm:w-auto gap-2 shadow-sm">
+              <a href="#how-it-works">See How It Works</a>
             </Button>
           </div>
         </div>
       </header>
-
-      {/* 3. TRUST BADGES */}
-      <section className="py-12 border-y border-slate-100 bg-slate-50/50">
-        <div className="container mx-auto px-4 flex flex-wrap justify-center items-center gap-8 md:gap-20 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-          <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest text-slate-600">
-            <CheckCircle2 className="h-5 w-5 text-indigo-600" /> 5,000+ Job Seekers
-          </div>
-          <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest text-slate-600">
-            <Zap className="h-5 w-5 text-indigo-600" /> ATS-Friendly
-          </div>
-          <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest text-slate-600">
-            <ShieldCheck className="h-5 w-5 text-indigo-600" /> GDPR Compliant
-          </div>
-          <div className="flex gap-8 text-xl font-black italic opacity-20 text-slate-900">
-            <span>LINKEDIN</span>
-            <span>INDEED</span>
-            <span>GLASSDOOR</span>
-          </div>
-        </div>
-      </section>
 
       {/* 4. CORE FEATURES SECTION */}
       <section id="features" className="py-32">
@@ -115,13 +89,13 @@ export default function Home() {
             <FeatureCard
               icon={<FileText />}
               title="Resume Intelligence"
-              description="Upload any PDF → AI parses and scores your resume against job descriptions."
+              description="Upload a text-based PDF or DOCX and review AI suggestions for your resume."
               accent="indigo"
             />
             <FeatureCard
               icon={<FileEdit />}
               title="AI Optimizer"
-              description="One-click rewrite of bullet points with metrics. Tailored to any job instantly."
+              description="Generate job-specific wording suggestions and check every edit against your experience."
               accent="indigo"
             />
             <FeatureCard
@@ -196,22 +170,22 @@ export default function Home() {
                 <TabsTrigger value="memory" className="rounded-xl px-6 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-bold transition-all">Memory</TabsTrigger>
                 <TabsTrigger value="rag" className="rounded-xl px-6 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-bold transition-all">RAG</TabsTrigger>
                 <TabsTrigger value="interview" className="rounded-xl px-6 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-bold transition-all">Interview</TabsTrigger>
-                <TabsTrigger value="auto" className="rounded-xl px-6 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-bold transition-all">Auto-Apply</TabsTrigger>
+                <TabsTrigger value="auto" className="rounded-xl px-6 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-bold transition-all">Save Jobs</TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent value="memory" className="animate-in fade-in slide-in-from-bottom-8 duration-700">
               <AdvancedFeaturePanel
                 title="Episodic Memory"
-                description="Our AI remembers your past preferences, specific career goals, and tone preferences—no repetitive prompts."
-                features={["Personalized tone mapping", "Context retention", "Skill evolution tracking"]}
+                description="Resume optimization can use recent interactions for the selected job as context."
+                features={["Job-specific context", "Recent interactions", "Saved conversation history"]}
               />
             </TabsContent>
             <TabsContent value="rag" className="animate-in fade-in slide-in-from-bottom-8 duration-700">
               <AdvancedFeaturePanel
                 title="Agentic RAG"
-                description="Searches internal and external sources simultaneously to find the best opportunities and verify data."
-                features={["Cross-platform search", "Vector-based matching", "Real-time verification"]}
+                description="Uses saved jobs and, when available, web search to suggest opportunities for your review."
+                features={["Saved-job search", "Semantic matching", "External search when available"]}
               />
             </TabsContent>
             <TabsContent value="interview" className="animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -223,71 +197,19 @@ export default function Home() {
             </TabsContent>
             <TabsContent value="auto" className="animate-in fade-in slide-in-from-bottom-8 duration-700">
               <AdvancedFeaturePanel
-                title="Auto-Apply (Supervised)"
-                description="One-click form filling with your final approval. Our agent handles the grunt work while you stay in control."
-                features={["Field detection", "AI form filling", "Review-first flow"]}
+                title="Save Jobs for Review"
+                description="Save selected opportunities to your tracker, then apply directly on the employer’s site."
+                features={["Saved opportunities", "Manual status updates", "Application notes"]}
               />
             </TabsContent>
           </Tabs>
         </div>
       </section>
 
-      {/* 8. PRICING SECTION */}
-      <section id="pricing" className="py-32 bg-slate-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl md:text-5xl font-black mb-4 tracking-tighter text-slate-900">Simple Pricing</h2>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Transparent plans for your career</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <PricingCard
-              title="Free Tier"
-              price="0"
-              description="For students and casual seekers."
-              features={["10 AI operations/month", "Resume parsing", "Basic optimizer"]}
-            />
-            <PricingCard
-              title="Pro Tier"
-              price="9.99"
-              description="The complete career toolkit."
-              popular
-              features={["Unlimited AI operations", "All agents (Interview, Researcher)", "Advanced analytics & memory"]}
-            />
-            <PricingCard
-              title="Enterprise"
-              price="Custom"
-              description="For bootcamps & universities."
-              features={["Bulk seats for students", "Career coach dashboard", "Custom API integrations"]}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* 9. TESTIMONIALS */}
-      <section className="py-32 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl md:text-5xl font-black mb-4 tracking-tighter text-slate-900">Success Stories</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <TestimonialCard
-              name="Sarah"
-              title="Software Engineer"
-              quote="Job Pilot  helped me rewrite my resume for 15 jobs in one afternoon. Landed 3 interviews!"
-            />
-            <TestimonialCard
-              name="Michael"
-              title="Product Manager"
-              quote="The interview simulator is uncanny. It asked exactly what my real interviewer asked."
-            />
-            <TestimonialCard
-              name="David"
-              title="Senior Data Analyst"
-              quote="The agentic researcher found 5 roles I missed on LinkedIn. One turned into an offer."
-            />
-          </div>
+      <section id="pricing" className="py-20 bg-slate-50">
+        <div className="container mx-auto px-4 text-center space-y-4">
+          <h2 className="text-3xl font-bold">Try Job Pilot</h2>
+          <p className="text-slate-600">New accounts receive 5 introductory AI credits. Paid upgrades are not available yet.</p>
         </div>
       </section>
 
@@ -301,7 +223,7 @@ export default function Home() {
                 <span className="text-lg font-black uppercase tracking-tighter text-slate-900">Job Pilot </span>
               </div>
               <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                The world's first autonomous AI career co-pilot designed to get you hired faster.
+                An AI-assisted workspace for preparing applications and organizing your job search.
               </p>
             </div>
             <div>
@@ -338,7 +260,7 @@ export default function Home() {
   );
 }
 
-function FeatureCard({ icon, title, description, accent }: any) {
+function FeatureCard({ icon, title, description }: any) {
   return (
     <div className={`group p-8 rounded-3xl bg-white border border-slate-100 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-500/10 hover:border-indigo-100`}>
       <div className={`h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mb-6 transition-all duration-500 group-hover:scale-110 text-indigo-600`}>
@@ -385,56 +307,5 @@ function AdvancedFeaturePanel({ title, description, features }: any) {
         <div className="absolute bottom-8 left-8 right-8 h-12 bg-slate-50 border border-slate-100 rounded-xl animate-pulse" />
       </div>
     </div>
-  );
-}
-
-function PricingCard({ title, price, description, features, popular }: any) {
-  return (
-    <Card className={`relative flex flex-col p-8 rounded-[40px] bg-white border-slate-200 transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 ${popular ? 'border-indigo-600 ring-2 ring-indigo-600/10 shadow-2xl shadow-indigo-100' : 'shadow-sm'}`}>
-      {popular && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-200">
-          Most Popular
-        </div>
-      )}
-      <CardHeader className="p-0 mb-8 text-center">
-        <CardTitle className="text-xl font-bold mb-4 text-slate-900">{title}</CardTitle>
-        <div className="flex items-baseline justify-center gap-1">
-          <span className="text-5xl font-black text-slate-900">${price}</span>
-          {price !== 'Custom' && <span className="text-slate-500 text-sm font-bold">/mo</span>}
-        </div>
-        <CardDescription className="mt-4 text-slate-500 font-semibold italic">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0 flex-1 space-y-4 mb-8">
-        {features.map((f: string, i: number) => (
-          <div key={i} className="flex items-center gap-3 text-sm font-bold text-slate-700">
-            <Check className="h-4 w-4 text-indigo-600" /> {f}
-          </div>
-        ))}
-      </CardContent>
-      <Button className={`w-full h-14 rounded-2xl font-bold transition-all ${popular ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-200' : 'bg-slate-50 text-slate-900 hover:bg-slate-100 border border-slate-200'}`}>
-        Get Started
-      </Button>
-    </Card>
-  );
-}
-
-function TestimonialCard({ name, title, quote }: any) {
-  return (
-    <Card className="p-8 rounded-[32px] bg-white border border-slate-100 shadow-sm flex flex-col gap-6 relative overflow-hidden group hover:border-indigo-100 hover:shadow-xl transition-all duration-500">
-      <Quote className="absolute -top-4 -right-4 h-24 w-24 text-slate-50 group-hover:text-indigo-50 transition-colors" />
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map(i => <Star key={i} className="h-4 w-4 text-indigo-400 fill-current" />)}
-      </div>
-      <p className="text-slate-600 italic text-lg leading-relaxed relative z-10 font-medium">"{quote}"</p>
-      <div className="flex items-center gap-4 mt-auto relative z-10">
-        <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center font-black text-indigo-600">
-          {name[0]}
-        </div>
-        <div>
-          <h4 className="font-bold text-sm text-slate-900">{name}</h4>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">{title}</p>
-        </div>
-      </div>
-    </Card>
   );
 }

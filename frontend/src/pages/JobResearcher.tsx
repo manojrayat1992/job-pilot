@@ -1,28 +1,28 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
 import { Resume } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { 
-  ArrowLeft, 
-  Loader2, 
-  Search, 
-  Sparkles, 
-  Globe, 
-  Database, 
-  FileCheck,
-  ExternalLink,
-  ChevronRight,
-  TrendingUp,
-  Brain,
-  Building2
+import {
+ArrowLeft,
+Brain,
+Building2,
+ChevronRight,
+Database,
+ExternalLink,
+FileCheck,
+Globe,
+Loader2,
+Search,
+Sparkles
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface RankedJob {
+  id?: string;
   title: string;
   company: string;
   location: string;
@@ -48,7 +48,7 @@ export default function JobResearcher() {
   const [query, setQuery] = useState('');
   
   const [isLoading, setIsLoading] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [selectedJobs, setSelectedJobs] = useState<Set<number>>(new Set());
 
@@ -73,6 +73,7 @@ export default function JobResearcher() {
 
     setIsLoading(true);
     setResult(null);
+    setSelectedJobs(new Set());
     try {
       const response = await api.post('/api/v1/agents/job-research', {
         query,
@@ -106,25 +107,25 @@ export default function JobResearcher() {
     }
   };
 
-  const handleAutoApply = async () => {
+  const handleSaveJobs = async () => {
     if (selectedJobs.size === 0) {
       toast({ title: 'Error', description: 'Please select at least one job.', variant: 'destructive' });
       return;
     }
 
-    setIsApplying(true);
+    setIsSaving(true);
     try {
       const selectedJobData = Array.from(selectedJobs).map(index => result!.jobs[index]);
-      await api.post('/api/v1/agents/auto-apply', {
+      await api.post('/api/v1/agents/save-jobs', {
         jobs: selectedJobData,
         resumeId: selectedResumeId || undefined
       });
-      toast({ title: 'Success', description: `Successfully applied to ${selectedJobs.size} jobs!` });
+      toast({ title: 'Success', description: `Saved selections to your tracker. No applications were submitted.` });
       setSelectedJobs(new Set());
     } catch (err: any) {
-      toast({ title: 'Error', description: 'Auto-apply failed.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Could not save jobs.', variant: 'destructive' });
     } finally {
-      setIsApplying(false);
+      setIsSaving(false);
     }
   };
 
@@ -138,7 +139,7 @@ export default function JobResearcher() {
             </Button>
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Search className="h-5 w-5 text-primary" />
-              Autonomous Job Researcher
+              Job Research
             </h1>
           </div>
         </div>
@@ -295,11 +296,11 @@ export default function JobResearcher() {
                       <Button 
                         size="sm" 
                         className="text-[10px] font-black uppercase h-8 px-4 rounded-full shadow-lg shadow-primary/20"
-                        disabled={selectedJobs.size === 0 || isApplying}
-                        onClick={handleAutoApply}
+                        disabled={selectedJobs.size === 0 || isSaving}
+                        onClick={handleSaveJobs}
                       >
-                        {isApplying ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Sparkles className="h-3 w-3 mr-2" />}
-                        Auto Apply ({selectedJobs.size})
+                        {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Sparkles className="h-3 w-3 mr-2" />}
+                        Save to Tracker ({selectedJobs.size})
                       </Button>
                       <span className="text-[10px] font-bold text-slate-400">{result?.jobs?.length || 0} Matches Found</span>
                     </div>

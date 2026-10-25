@@ -15,12 +15,19 @@ import java.util.UUID;
 
 @Repository
 public interface ApplicationRepository extends JpaRepository<JobApplication, UUID> {
+    @Query(value="SELECT id FROM users WHERE id=?1 FOR UPDATE",nativeQuery=true)
+    UUID lockOwner(UUID userId);
+
+    Optional<JobApplication> findFirstByUserIdAndJobIdOrderByCreatedAtAsc(UUID userId, UUID jobId);
+
 
     Page<JobApplication> findByUserIdOrderByUpdatedAtDesc(UUID userId, Pageable pageable);
 
     Page<JobApplication> findByUserIdAndStatusOrderByUpdatedAtDesc(UUID userId, ApplicationStatus status, Pageable pageable);
 
     Optional<JobApplication> findByIdAndUserId(UUID id, UUID userId);
+
+    boolean existsByUserIdAndJobId(UUID userId, UUID jobId);
 
     long countByUserIdAndStatus(UUID userId, ApplicationStatus status);
 

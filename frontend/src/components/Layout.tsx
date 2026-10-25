@@ -1,8 +1,8 @@
-import { ReactNode } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
-import { Briefcase, LayoutDashboard, FileText, Sparkles, LogOut, CheckSquare, Bot, Activity, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuthStore } from '@/store/authStore';
+import { Activity,Bot,Briefcase,CheckSquare,FileText,LayoutDashboard,LogOut,Sparkles,Zap } from 'lucide-react';
+import { ReactNode } from 'react';
+import { NavLink,useLocation,useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
   children: ReactNode;
@@ -68,7 +68,7 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/pricing')}
                 className="hidden md:flex bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold shadow-sm shadow-amber-500/20"
               >
-                <Zap className="h-4 w-4 mr-2" /> Upgrade to Pro
+                <Zap className="h-4 w-4 mr-2" /> Plan availability
               </Button>
             )}
             {user?.onboardingCompleted && (

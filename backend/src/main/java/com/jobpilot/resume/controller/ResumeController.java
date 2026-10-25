@@ -67,7 +67,7 @@ public class ResumeController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update resume metadata (title, tags, parsed content)")
+    @Operation(summary = "Update metadata or save content as a new version")
     public ResponseEntity<ApiResponse<ResumeDTO>> update(
             @PathVariable UUID id,
             @RequestBody Map<String, Object> updates) {
@@ -98,7 +98,7 @@ public class ResumeController {
     }
 
     @PostMapping("/{id}/tailor-and-download")
-    @Operation(summary = "Tailor resume to job description and download as PDF")
+    @Operation(summary = "Retired: create and approve a review draft before export", deprecated = true)
     public ResponseEntity<byte[]> tailorAndDownload(
             @PathVariable UUID id,
             @RequestBody Map<String, String> request) {

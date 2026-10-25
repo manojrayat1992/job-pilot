@@ -1,24 +1,22 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { Resume, Job } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  ArrowLeft,
-  Loader2,
-  Sparkles,
-  CheckCircle2,
-  TrendingUp,
-  History,
-  ThumbsUp,
-  ThumbsDown,
-  ChevronRight
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { AiFeedback } from '@/components/ai/AiFeedback';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
+import { Tabs,TabsContent,TabsList,TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import api from '@/lib/api';
+import { Job,Resume } from '@/types';
+import {
+ArrowLeft,
+CheckCircle2,
+ChevronRight,
+History,
+Loader2,
+Sparkles,
+TrendingUp
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface OptimizeResult {
   optimizedResume: any;
@@ -42,6 +40,7 @@ export default function ResumeOptimizer() {
   const [useRawJobDescription, setUseRawJobDescription] = useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [resultContext, setResultContext] = useState<{ resumeId: string; jobId?: string; jobDescription?: string } | null>(null);
   const [result, setResult] = useState<OptimizeResult | null>(null);
 
   useEffect(() => {
@@ -68,6 +67,9 @@ export default function ResumeOptimizer() {
     }
 
     setIsLoading(true);
+    setResult(null);
+    setResultContext(null);
+    const context = { resumeId: selectedResumeId, jobId: useRawJobDescription ? undefined : selectedJobId, jobDescription: useRawJobDescription ? jobDescription : undefined };
     try {
       const payload: any = {
         resumeId: selectedResumeId,
@@ -80,6 +82,7 @@ export default function ResumeOptimizer() {
 
       const response = await api.post('/api/v1/ai/optimize-resume', payload);
       setResult(response.data.data);
+      setResultContext(context);
       toast({ title: 'Success', description: 'Resume optimized successfully!' });
     } catch (err: any) {
       toast({ title: 'Error', description: 'Optimization failed.', variant: 'destructive' });
@@ -89,25 +92,17 @@ export default function ResumeOptimizer() {
   };
 
   const handleSaveAsNew = async () => {
-    if (!result || !selectedResumeId) return;
-
+    if (!result || !resultContext) return;
     setIsLoading(true);
     try {
-      const sourceResume = resumes.find(r => r.id === selectedResumeId);
-      const targetName = useRawJobDescription 
-        ? 'Custom Job' 
-        : (jobs.find(j => j.id === selectedJobId)?.company || 'Job');
-      const newTitle = `${sourceResume?.title} (Optimized for ${targetName})`;
-      
-      await api.post('/api/v1/resumes', {
-        title: newTitle,
-        parsedJson: result.optimizedResume,
+      const response = await api.post(`/api/v1/resumes/${resultContext.resumeId}/drafts`, {
+        jobId: resultContext.jobId,
+        jobDescription: resultContext.jobDescription,
+        proposedResume: result.optimizedResume,
       });
-      
-      toast({ title: 'Saved', description: 'New optimized version created in your Resume Hub.' });
-      navigate('/resumes');
+      navigate(`/resumes?source=${resultContext.resumeId}&draft=${response.data.data.id}`);
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save new version.', variant: 'destructive' });
+      toast({ title: 'Draft not saved', description: 'The proposed resume must preserve your original facts and supported format. Generate a draft from Resume Hub to retry.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -157,7 +152,7 @@ export default function ResumeOptimizer() {
             </Button>
             {result && (
               <Button size="sm" onClick={handleSaveAsNew} disabled={isLoading}>
-                <Sparkles className="mr-2 h-4 w-4" /> Save as New Version
+                <Sparkles className="mr-2 h-4 w-4" /> Review and Save Draft
               </Button>
             )}
           </div>

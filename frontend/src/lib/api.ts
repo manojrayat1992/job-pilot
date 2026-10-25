@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use relative URL in development to go through Vite proxy, full URL in production
-const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'http://localhost:8080');
+import { API_BASE_URL } from './config';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -32,7 +32,7 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
@@ -42,10 +42,10 @@ api.interceptors.response.use(
             refreshToken,
           });
 
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+          const { accessToken, refreshToken: newRefreshToken, user: refreshedUser } = response.data.data;
           const user = useAuthStore.getState().user;
           if (user) {
-             useAuthStore.getState().setAuth(user, accessToken, newRefreshToken);
+             useAuthStore.getState().setAuth({ ...user, role: refreshedUser.role, credits: refreshedUser.credits }, accessToken, newRefreshToken);
           }
 
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;

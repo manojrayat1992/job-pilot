@@ -3,28 +3,24 @@
 # ============================================================
 
 # Stage 1: Build
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /app
 
-# Copy Maven wrapper and POM first for dependency caching
+# Copy the POM first for dependency caching
 COPY pom.xml ./
-COPY .mvn .mvn
-COPY mvnw ./
-RUN chmod +x mvnw
-
-# Download dependencies (cached layer)
-RUN ./mvnw dependency:go-offline -B
 
 # Copy source and build
 COPY src ./src
-RUN ./mvnw clean package -DskipTests -B
+RUN mvn clean package -DskipTests -B
 
 # Stage 2: Runtime
-FROM eclipse-temurin:21-jre-alpine
+# Keep a glibc-based runtime: DJL tokenizers and ONNX load native Linux libraries.
+# Alpine previously failed to load libtokenizers.so (missing libstdc++.so.6).
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 # Create non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup -m appuser
 
 # Copy JAR from builder
 COPY --from=builder /app/target/*.jar app.jar
@@ -36,7 +32,7 @@ USER appuser
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 ENTRYPOINT ["java", "-XX:+UseZGC", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

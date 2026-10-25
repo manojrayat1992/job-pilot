@@ -18,8 +18,19 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
 
     Optional<Job> findByIdAndUserId(UUID id, UUID userId);
 
-    @Query(value = "SELECT * FROM jobs WHERE user_id = ?1 ORDER BY embedding <=> cast(?2 as vector) LIMIT 5", nativeQuery = true)
-    List<Job> findTop5ByUserIdOrderByEmbedding(UUID userId, float[] embedding);
+    @Query(value = """
+        SELECT j.* FROM jobs j JOIN job_embeddings e ON e.job_id=j.id
+        JOIN embedding_tasks t ON t.kind='JOB' AND t.entity_id=j.id AND t.status='COMPLETED'
+        WHERE j.user_id=?1 AND e.embedding IS NOT NULL
+        ORDER BY e.embedding <=> cast(?2 as vector),j.id LIMIT 5
+        """, nativeQuery = true)
+    List<Job> searchIndexedJobs(UUID userId, String vector);
+
+    default List<Job> findTop5ByUserIdOrderByEmbedding(UUID userId, float[] embedding) {
+        return searchIndexedJobs(userId, com.jobpilot.ai.service.EmbeddingService.vectorLiteral(embedding));
+    }
+
+    Optional<Job> findFirstByUserIdAndSourceUrlOrderByCreatedAtAsc(UUID userId, String sourceUrl);
 
     Optional<Job> findByUserIdAndSourceUrl(UUID userId, String sourceUrl);
 

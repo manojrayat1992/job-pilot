@@ -1,329 +1,96 @@
 # Job Pilot
 
-AI-powered job application assistant that helps you optimize your resume, generate cover letters, prepare for interviews, and track your job applications.
+Job Pilot is a prototype application workspace built with Java 21, Spring Boot, Spring AI, React, TypeScript, PostgreSQL, and pgvector. It supports resume suggestions, cover-letter drafts, interview practice, job research, an application tracker, and saved Agent Command Center workflows with resumable drafts.
 
-## Overview
+Start with the [project assessment](docs/PROJECT-ASSESSMENT.md) for the technical and commercial review, and the [stabilization notes](docs/STABILIZATION.md) for the changes made after that assessment. This repository is not yet ready for a public paid launch.
 
-Job Pilot is a full-stack application leveraging AI to streamline your job search process. It includes a web application, browser extension, and backend API to provide a comprehensive job application toolkit.
+## Current feature boundaries
 
-## Features
+- Job research saves selected jobs as **SAVED**. It does not submit applications to employers.
+- Email synchronization, hiring-contact discovery/unlock, extension autofill, and paid upgrades are disabled until their real integrations are implemented and verified.
+- AI-generated text needs user review. Reviewed resume versions are implemented; live quality evaluation, durable embedding delivery, reliable credit accounting, live provider evaluation, automatic workflow recovery and cancellation remain open work. Agent Command Center history and user-triggered step recovery are implemented; see [saved workflows](docs/WORKFLOW-PERSISTENCE.md).
+- Redis, Playwright, and Stripe dependencies are present; their presence does not establish a working production integration.
 
-- **Resume Optimizer**: AI-powered resume optimization tailored to specific job descriptions
-- **Cover Letter Generator**: Generate personalized cover letters for job applications
-- **Interview Preparation**: Practice interview questions with AI assistance
-- **Job Application Tracking**: Manage and track all your job applications in one place
-- **Browser Extension**: Quick access to AI tools while browsing job boards
-- **Vector Search**: Semantic search for job descriptions and resumes using pgvector
+## Reviewed resume versions
 
-## Tech Stack
+In Resume Hub, use the sparkle action to generate a draft, compare changes, confirm factual accuracy and save a separate resume before PDF export. Manual content edits also preserve the original. See [the versioning guide](docs/RESUME-VERSIONING.md) for behavior, migration V16, tests and remaining limits.
 
-### Backend
-- **Spring Boot 3.3.5** - Java framework
-- **Java 21** - Programming language
-- **Spring AI** - OpenAI integration
-- **PostgreSQL with pgvector** - Database with vector search capabilities
-- **Redis** - Caching and session management
-- **Spring Security + JWT** - Authentication and authorization
-- **Apache Tika** - Document parsing
-- **OpenPDF** - PDF generation
-- **Playwright** - Headless browser automation
-- **Stripe** - Payment processing
-- **Flyway** - Database migrations
+## Local setup
 
-### Frontend
-- **React 18** - UI library
-- **TypeScript** - Type safety
-- **Vite** - Build tool and dev server
-- **TailwindCSS** - Styling
-- **shadcn/ui** - UI components
-- **React Router** - Client-side routing
-- **Zustand** - State management
-- **React Query** - Data fetching
-- **Axios** - HTTP client
+Run the following commands from this directory, which contains `backend`, `frontend`, and `docker`.
 
-### Browser Extension
-- **Chrome Extension** - Browser extension for quick access to AI tools
+Prerequisites: Java 21, Maven 3.8+, Node.js 22, npm, and Docker Compose. There is no Maven wrapper in this repository. The examples assume a POSIX shell.
 
-## Project Structure
+1. Copy `.env.example` to `.env` and fill it in. `JWT_SECRET` is required; generate a unique value with `openssl rand -base64 48`. Never commit real credentials.
+2. Set `GROQ_API_KEY` for chat. Set `OPENAI_API_KEY` separately only if you need interview voice input/output. If your old `OPENAI_API_KEY` contained a Groq key, move that value to `GROQ_API_KEY`; never reuse it for OpenAI audio. Missing audio credentials disable voice explicitly while text remains available. `SERPAPI_KEY` is optional for external job research. See [AI provider configuration and verification](docs/AI-PROVIDER-STABILIZATION.md).
+3. Load your trusted local environment file into the shell. Spring Boot does not automatically load the root `.env` file:
 
-```
-job-pilot/
-├── backend/                 # Spring Boot backend API
-│   ├── src/
-│   │   └── main/
-│   │       ├── java/       # Java source code
-│   │       └── resources/  # Configuration files
-│   └── pom.xml            # Maven dependencies
-├── frontend/               # React + TypeScript frontend
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── pages/         # Page components
-│   │   ├── lib/           # Utilities and API client
-│   │   └── store/         # Zustand stores
-│   └── package.json       # Node dependencies
-├── extension/              # Browser extension
-│   ├── manifest.json      # Extension manifest
-│   ├── content.js         # Content script
-│   ├── background.js      # Background script
-│   └── popup.html         # Extension popup
-├── docker/                 # Docker configurations
-│   └── docker-compose.yml # Development services
-├── .env.example           # Environment variables template
-└── README.md              # This file
+```sh
+set -a
+. ./.env
+set +a
 ```
 
-## Prerequisites
+4. Start local infrastructure:
 
-- **Java 21** - For backend development
-- **Node.js 18+** - For frontend development
-- **Maven 3.8+** - For backend build
-- **Docker & Docker Compose** - For running PostgreSQL and Redis
-- **OpenAI API Key** - Required for AI features
-- **SerpAPI Key** - Required for job search (optional)
-
-## Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd job-pilot
+```sh
+docker compose --env-file .env -f docker/docker-compose.yml up -d postgres redis
 ```
 
-### 2. Set Up Environment Variables
+The Compose database credentials must match the backend environment. The defaults are for local development only.
 
-Copy the example environment file and fill in your values:
+5. Start the backend in that same shell:
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and provide:
-- `OPENAI_API_KEY` - Your OpenAI API key
-- `SERPAPI_KEY` - Your SerpAPI key (optional)
-- Database credentials (or use defaults)
-- JWT secret (generate a secure random string)
-
-### 3. Start Infrastructure Services
-
-Start PostgreSQL and Redis using Docker Compose:
-
-```bash
-cd docker
-docker-compose up -d
-```
-
-This will start:
-- PostgreSQL on port 5432 (with pgvector extension)
-- Redis on port 6379
-
-### 4. Backend Setup
-
-Navigate to the backend directory:
-
-```bash
+```sh
 cd backend
-```
-
-Build and run the backend:
-
-```bash
-mvn clean install
 mvn spring-boot:run
 ```
 
-The backend API will be available at `http://localhost:8080`
+The backend listens on `http://localhost:8080`; Swagger UI is at `/swagger-ui.html`. Application settings live in `backend/src/main/resources/application.yml`. Flyway runs database migrations on application startup.
 
-API documentation (Swagger UI) is available at `http://localhost:8080/swagger-ui.html`
+6. In another terminal, from the directory containing this README:
 
-### 5. Frontend Setup
-
-Navigate to the frontend directory:
-
-```bash
+```sh
 cd frontend
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Start the development server:
-
-```bash
+npm ci
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`
+Vite serves the UI at `http://localhost:5173` and proxies `/api` to the local backend. Use `frontend/package-lock.json` with npm for repeatable installations. The separate pnpm lockfile is not maintained by this verification workflow.
 
-### 6. Browser Extension (Optional)
+`VITE_API_URL` is optional. Leaving it unset uses the current origin, including the Vite proxy. For a separate API host, configure its origin at build time and set `CORS_ORIGINS` on the backend to the exact frontend origins. Production hosting must proxy `/api` if the frontend uses the current origin.
 
-Load the extension in Chrome:
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension` directory
+## Verification
 
-## Configuration
+From `backend`, with Java 21 selected:
 
-### Backend Configuration
-
-Backend configuration is in `backend/src/main/resources/application-dev.yml`:
-
-- Database connection settings
-- Redis connection settings
-- OpenAI API configuration
-- JWT settings
-- CORS origins
-
-### Frontend Configuration
-
-Frontend environment variables (create `.env` in frontend directory):
-
-```env
-VITE_API_URL=http://localhost:8080
+```sh
+mvn verify
 ```
 
-## API Endpoints
+From `frontend`:
 
-Key API endpoints (base URL: `http://localhost:8080/api`):
-
-- `POST /auth/register` - User registration
-- `POST /auth/login` - User login
-- `POST /auth/refresh` - Refresh JWT token
-- `POST /ai/resume-optimize` - Optimize resume
-- `POST /ai/cover-letter` - Generate cover letter
-- `POST /ai/interview-prep` - Interview preparation
-- `GET /applications` - List job applications
-- `POST /applications` - Create job application
-- `PUT /applications/{id}` - Update job application
-- `DELETE /applications/{id}` - Delete job application
-
-For complete API documentation, visit `http://localhost:8080/swagger-ui.html`
-
-## Database Migrations
-
-Database migrations are managed with Flyway. Migration files are located in:
-`backend/src/main/resources/db/migration/`
-
-To run migrations:
-```bash
-cd backend
-mvn flyway:migrate
-```
-
-## Development
-
-### Running Tests
-
-Backend tests:
-```bash
-cd backend
-mvn test
-```
-
-Frontend tests:
-```bash
-cd frontend
-npm run test
-```
-
-### Code Style
-
-- Backend: Follow Java coding conventions
-- Frontend: ESLint and Prettier configured
-- Use meaningful commit messages
-
-## Deployment
-
-### Backend Deployment
-
-Build the JAR file:
-```bash
-cd backend
-mvn clean package -DskipTests
-```
-
-The JAR file will be in `backend/target/job-pilot-backend-0.1.0-SNAPSHOT.jar`
-
-Run with:
-```bash
-java -jar target/job-pilot-backend-0.1.0-SNAPSHOT.jar
-```
-
-### Frontend Deployment
-
-Build for production:
-```bash
-cd frontend
+```sh
+npm run lint
 npm run build
 ```
 
-The built files will be in `frontend/dist/`
+The frontend does not currently define an `npm test` script. Lint has known warnings; they are documented in the stabilization notes. Backend tests cover service logic, provider contracts with mocked responses, and Spring MVC security/SSE behavior. Set `JOBPILOT_REVIEW_DB_URL` to an empty disposable PostgreSQL database to include the database integration tests; see the stabilization notes. No live AI provider test is implied.
 
-Deploy the `dist` folder to your web server or hosting platform.
+GitHub Actions runs backend verification and frontend installation, lint, and build. The workflow still needs its first remote execution after the changes are pushed.
 
-## Troubleshooting
+## Packaging
 
-### Database Connection Issues
+From `backend`:
 
-Ensure PostgreSQL is running:
-```bash
-docker-compose ps
+```sh
+mvn clean package
 ```
 
-Check logs:
-```bash
-docker-compose logs postgres
-```
+A Dockerfile is supplied in `backend`; it uses a Maven builder and a glibc-based Temurin runtime. Keep the runtime compatible with the native DJL tokenizer and ONNX libraries; the previous Alpine runtime failed at startup. The running ARM64 container was checked on 24 October 2026: native dependencies resolved, ONNX initialized, and `/actuator/health` returned `UP`. See [stabilization notes](docs/STABILIZATION.md) for the verification scope. End-to-end AI feature behavior and fresh container-build reproducibility remain separate checks.
 
-### Redis Connection Issues
+No license grant is established here; add an appropriate license file before distributing under a named license.
 
-Ensure Redis is running:
-```bash
-docker-compose ps
-```
+AI calls now use the [credit accounting ledger](docs/CREDIT-ACCOUNTING.md): one app credit per successful chat/audio call, atomic reservations, refunds for provider errors, and reusable workflow responses. V19 moves spendable balances into `ai_credit_accounts`; `users.credits` is retained only as the legacy/initial balance. Unresolved calls require operator reconciliation. Provider currency costs and paid upgrades are still unavailable.
 
-### OpenAI API Errors
-
-Verify your API key is set correctly in `.env`:
-```bash
-OPENAI_API_KEY=sk-...
-```
-
-### Port Conflicts
-
-If ports are already in use, modify the ports in:
-- `docker/docker-compose.yml` (for PostgreSQL/Redis)
-- `backend/src/main/resources/application-dev.yml` (for backend)
-- Frontend `.env` (for frontend API URL)
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Write tests for new features
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Support
-
-For issues and questions:
-- Open an issue on GitHub
-- Check existing documentation
-- Review API documentation at `/swagger-ui.html`
-
-## Acknowledgments
-
-- Spring AI team for the AI integration framework
-- OpenAI for GPT API
-- pgvector team for vector database extension
-- shadcn/ui for beautiful UI components
+Search now reads the same embedding tables used by ingestion. [Search integrity](docs/SEARCH-INTEGRITY.md) describes V20's durable indexing queue, retry/status endpoints, concurrent job/tracker save guards and source-backed research IDs. V20 queues existing sources for rebuilding, so deploy matching backend/frontend with old workers stopped and allow time for indexing. The Jobs page shows preparation status and retry controls.

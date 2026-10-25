@@ -11,7 +11,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-import com.jobpilot.job.converter.VectorConverter;
 
 @Entity
 @Table(name = "jobs")
@@ -58,9 +57,6 @@ public class Job {
     @Column(name = "skills_nice", columnDefinition = "TEXT[]")
     private String[] skillsNice;
 
-    @Column(name = "embedding", columnDefinition = "vector(1536)")
-    @Convert(converter = VectorConverter.class)
-    private float[] embedding;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

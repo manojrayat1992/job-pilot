@@ -1,29 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
-import api from '@/lib/api';
-import { JobApplication } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Plus,
-  Search,
-  Calendar,
-  MapPin,
-  Building2,
-  MoreHorizontal,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Trophy,
-  RefreshCw,
-  Mail
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { useApiCall } from '@/hooks/useApiCall';
+import api from '@/lib/api';
+import { JobApplication } from '@/types';
+import {
+AlertCircle,
+Building2,
+Calendar,
+CheckCircle2,
+Clock,
+MapPin,
+MoreHorizontal,
+Plus,
+Search,
+Trophy,
+XCircle
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const STATUS_CONFIG = {
   SAVED: { title: 'Saved', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Clock },
@@ -38,9 +34,7 @@ export default function Applications() {
   const navigate = useNavigate();
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
   const { execute, isLoading } = useApiCall();
-  const { toast } = useToast();
 
   useEffect(() => {
     fetchApplications();
@@ -60,25 +54,6 @@ export default function Applications() {
     app.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
     app.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const handleEmailSync = async () => {
-    setIsSyncing(true);
-    toast({ title: 'Sync Started', description: 'Scanning inbox for application updates...', duration: 2000 });
-    try {
-      const res = await api.post('/api/v1/integrations/email/sync');
-      const updatedCount = res.data.data.updatedApplications;
-      if (updatedCount > 0) {
-        toast({ title: 'Inbox Synchronized', description: `Detected ${updatedCount} status update(s) from your emails.` });
-        fetchApplications();
-      } else {
-        toast({ title: 'Inbox Synchronized', description: 'No new status updates found in your recent emails.' });
-      }
-    } catch (error) {
-      toast({ title: 'Sync Failed', description: 'Could not connect to the email provider. Please ensure OAuth is configured.', variant: 'destructive' });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   if (isLoading && applications.length === 0) {
     return (
@@ -111,11 +86,7 @@ export default function Applications() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button variant="outline" onClick={handleEmailSync} disabled={isSyncing} className="shadow-sm border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
-            <Mail className="mr-2 h-4 w-4" />
-            {isSyncing ? 'Scanning...' : 'Sync Inbox'}
-            {isSyncing && <RefreshCw className="ml-2 h-4 w-4 animate-spin" />}
-          </Button>
+          <span className="text-sm text-muted-foreground">Update statuses manually; email sync is not available yet.</span>
           <Button onClick={() => navigate('/applications/new')} className="shadow-lg shadow-primary/20 font-bold">
             <Plus className="mr-2 h-5 w-5" />
             Add Application

@@ -1,27 +1,25 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
 import { Resume } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, 
-  Send, 
-  User, 
-  Cpu, 
-  Building2, 
-  UserCheck, 
-  Loader2, 
-  Trophy,
-  Brain,
-  MessageCircle,
-  Mic,
-  Square,
-  Volume2
+import {
+ArrowLeft,
+Brain,
+Building2,
+Cpu,
+Loader2,
+Mic,
+Send,
+Square,
+Trophy,
+User,
+UserCheck
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useEffect,useRef,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -49,7 +47,6 @@ export default function MockInterview() {
   
   // Audio state
   const [isRecording, setIsRecording] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioPlayerRef = useRef<HTMLAudioElement>(null);
@@ -187,6 +184,10 @@ export default function MockInterview() {
           newMsgs[newMsgs.length - 1].content = data.transcribedText;
           return newMsgs;
         });
+      }
+
+      if (data.audioError) {
+        toast({ title: 'Audio unavailable', description: data.audioError });
       }
 
       if (data.audioBase64 && audioPlayerRef.current) {

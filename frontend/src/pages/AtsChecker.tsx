@@ -1,22 +1,19 @@
-import React, { useState, useRef } from 'react';
-import api from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { 
-  Upload, 
-  FileText, 
-  Sparkles, 
-  ShieldCheck, 
-  Zap, 
-  FileSearch, 
-  ChevronRight,
-  ArrowLeft,
-  Loader2
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { AtsAnalysisView } from '@/components/resume/AtsAnalysisView';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import api from '@/lib/api';
+import { motion } from 'framer-motion';
+import {
+ArrowLeft,
+ChevronRight,
+FileSearch,
+FileText,
+ShieldCheck,
+Sparkles,
+Upload,
+Zap
+} from 'lucide-react';
+import React,{ useRef,useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function AtsChecker() {

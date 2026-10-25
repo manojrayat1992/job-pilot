@@ -6,6 +6,11 @@ import com.jobpilot.common.dto.ApiResponse;
 import com.jobpilot.resume.entity.Resume;
 import com.jobpilot.resume.repository.ResumeRepository;
 import com.jobpilot.common.exception.ResourceNotFoundException;
+import com.jobpilot.common.util.SecurityUtils;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +24,6 @@ import java.util.HashMap;
 @RestController
 @RequestMapping("/api/v1/copilot")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class CopilotController {
 
     private final ResumeRepository resumeRepository;
@@ -28,11 +32,11 @@ public class CopilotController {
 
     @PostMapping("/map-fields")
     public ResponseEntity<ApiResponse<Map<String, Object>>> mapFields(
-            @RequestBody MapFieldsRequest request) {
+            @Valid @RequestBody MapFieldsRequest request) {
         
         log.info("Received field mapping request for {} fields", request.getFields().size());
         
-        Resume resume = resumeRepository.findById(request.getResumeId())
+        Resume resume = resumeRepository.findByIdAndUserId(request.getResumeId(), SecurityUtils.getCurrentUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Resume", "id", request.getResumeId()));
         
         try {
@@ -42,7 +46,7 @@ public class CopilotController {
             // Perform the semantic mapping using AI
             Map<String, Object> mappings = aiService.mapFormFields(
                     formFieldsJson, 
-                    resume.getParsedJson() != null ? resume.getParsedJson().toString() : "", 
+                    objectMapper.writeValueAsString(resume.getParsedJson()),
                     ""
             );
             
@@ -55,7 +59,10 @@ public class CopilotController {
 
     @lombok.Data
     public static class MapFieldsRequest {
+        @NotNull
         private java.util.UUID resumeId;
-        private List<String> fields;
+        @NotNull
+        @Size(min = 1, max = 100)
+        private List<@NotBlank @Size(max = 500) String> fields;
     }
 }

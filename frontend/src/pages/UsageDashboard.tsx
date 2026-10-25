@@ -1,23 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import api from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { PageLoader } from '@/components/loading/PageLoader';
-import {
-  Activity,
-  Cpu,
-  Database,
-  Infinity as InfinityIcon,
-  Zap,
-  Clock,
-  CheckCircle2,
-  XCircle
-} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
+import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import {
+Activity,
+CheckCircle2,
+Clock,
+Cpu,
+Database,
+Infinity as InfinityIcon,
+Zap
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+
+interface UsageData {
+  credits: { remaining: number; isUnlimited: boolean; reserved: number };
+  summary: { totalTokens: number; totalRequests: number; unknownTokenRequests: number; unresolvedRequests: number; chargedCredits: number };
+  modelStats: { model: string; tokensUsed: number; unknownTokenRequests: number }[];
+  recentActivity: { id: string; feature: string; model: string; tokensUsed: number | null; durationMs: number | null; timestamp: string; status: string; chargedCredits: number; reservedCredits: number }[];
+}
 
 export default function UsageDashboard() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,10 +50,12 @@ export default function UsageDashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
           <Activity className="h-8 w-8 text-indigo-600" />
-          Usage & AI Logs
+          AI Usage & Credits
         </h1>
       </div>
 
+      <p className="text-sm text-slate-600">Each successful chat, transcription, or speech call uses one credit. A workflow or voice turn can make several calls. Provider errors and empty responses return their reserved credits. A completed model call still uses a credit if later validation or saving fails. Usage shown here starts when credit accounting was enabled; token totals include only reported usage and are not a provider bill.</p>
+      {summary.unresolvedRequests > 0 && <p role="status" className="rounded-lg bg-amber-50 p-4 text-amber-900">{summary.unresolvedRequests} interrupted call(s) need support review. Their credits remain reserved until the outcome is reconciled. Share the reservation ID from the activity table with support.</p>}
       {/* Top Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-gradient-to-br from-indigo-500 to-violet-600 text-white border-none shadow-lg">
@@ -58,7 +65,7 @@ export default function UsageDashboard() {
                 <Zap className="h-6 w-6" />
               </div>
               <Badge className="bg-white/20 hover:bg-white/30 text-white border-none">
-                {credits.isUnlimited ? 'PRO PLAN' : 'FREE PLAN'}
+                {credits.isUnlimited ? 'UNLIMITED' : 'CREDIT BALANCE'}
               </Badge>
             </div>
             <p className="text-indigo-100 font-medium mb-1">Available AI Credits</p>
@@ -67,7 +74,7 @@ export default function UsageDashboard() {
             </h2>
             {!credits.isUnlimited && (
               <p className="text-sm text-indigo-100 mt-4 opacity-80">
-                Upgrade to Pro for unlimited access to all AI features.
+                {credits.reserved} credit(s) reserved for pending or unresolved calls. Paid upgrades are currently unavailable.
               </p>
             )}
           </CardContent>
@@ -78,10 +85,11 @@ export default function UsageDashboard() {
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl w-fit mb-4">
               <Database className="h-6 w-6" />
             </div>
-            <p className="text-slate-500 font-medium mb-1">Total Tokens Processed</p>
+            <p className="text-slate-500 font-medium mb-1">Reported Tokens</p>
             <h2 className="text-4xl font-black text-slate-900">
               {summary.totalTokens.toLocaleString()}
             </h2>
+            <p className="mt-3 text-sm text-slate-500">{summary.unknownTokenRequests} completed call(s) have no token report.</p>
           </CardContent>
         </Card>
 
@@ -90,7 +98,7 @@ export default function UsageDashboard() {
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl w-fit mb-4">
               <Cpu className="h-6 w-6" />
             </div>
-            <p className="text-slate-500 font-medium mb-1">Total AI Requests</p>
+            <p className="text-slate-500 font-medium mb-1">Recorded AI Attempts</p>
             <h2 className="text-4xl font-black text-slate-900">
               {summary.totalRequests.toLocaleString()}
             </h2>
@@ -108,7 +116,7 @@ export default function UsageDashboard() {
             <p className="text-slate-500 text-sm">No model usage data available yet.</p>
           ) : (
             <div className="space-y-4">
-              {modelStats.map((stat: any, idx: number) => {
+              {modelStats.map((stat, idx) => {
                 const percentage = summary.totalTokens > 0 
                   ? (stat.tokensUsed / summary.totalTokens) * 100 
                   : 0;
@@ -116,7 +124,7 @@ export default function UsageDashboard() {
                   <div key={idx} className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-bold text-slate-700">{stat.model}</span>
-                      <span className="text-slate-500">{stat.tokensUsed.toLocaleString()} tokens</span>
+                      <span className="text-slate-500">{stat.tokensUsed.toLocaleString()} reported tokens · {stat.unknownTokenRequests} without usage</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-3">
                       <motion.div 
@@ -150,30 +158,34 @@ export default function UsageDashboard() {
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Feature</th>
                     <th className="px-6 py-4">Model</th>
+                    <th className="px-6 py-4">Credits</th>
                     <th className="px-6 py-4">Tokens</th>
                     <th className="px-6 py-4">Duration</th>
                     <th className="px-6 py-4 text-right">Timestamp</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {recentActivity.map((log: any) => (
+                  {recentActivity.map((log) => (
                     <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4">
-                        {log.status === 'SUCCESS' ? (
+                        {log.status === 'SETTLED' ? (
                           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                         ) : (
-                          <XCircle className="h-5 w-5 text-rose-500" />
+                          <Clock className="h-5 w-5 text-amber-600" />
                         )}
+                        <span className="text-xs">{log.status === 'SETTLED' ? 'Charged' : log.status === 'RELEASED' ? 'Refunded' : log.status === 'UNKNOWN' ? 'Needs review' : 'Reserved'}</span>
+                        <details className="text-xs mt-1"><summary>Reservation ID</summary><code>{log.id}</code></details>
                       </td>
                       <td className="px-6 py-4 font-medium text-slate-900">{log.feature}</td>
                       <td className="px-6 py-4 text-slate-600">
                         <Badge variant="outline" className="text-xs bg-white">{log.model}</Badge>
                       </td>
+                      <td className="px-6 py-4">{log.chargedCredits} charged · {log.reservedCredits} held</td>
                       <td className="px-6 py-4 text-slate-600 font-mono text-xs">
-                        {log.tokensUsed > 0 ? log.tokensUsed.toLocaleString() : '-'}
+                        {log.tokensUsed != null ? log.tokensUsed.toLocaleString() : 'Not reported'}
                       </td>
                       <td className="px-6 py-4 text-slate-500">
-                        {log.durationMs > 0 ? `${(log.durationMs / 1000).toFixed(1)}s` : '-'}
+                        {log.durationMs != null && log.durationMs > 0 ? `${(log.durationMs / 1000).toFixed(1)}s` : '-'}
                       </td>
                       <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">

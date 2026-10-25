@@ -1,24 +1,22 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+Accordion,
+AccordionContent,
+AccordionItem,
+AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  AlertCircle, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Sparkles, 
-  ChevronDown, 
-  ChevronUp,
-  Layout,
-  Type,
-  FileSearch
-} from 'lucide-react';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+AlertCircle,
+AlertTriangle,
+CheckCircle2,
+FileSearch,
+Layout,
+Sparkles,
+Type
+} from 'lucide-react';
+import React from 'react';
 
 interface AtsIssue {
   category: string;

@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { Resume, Job } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Save, Building, Briefcase, Calendar, Link2, FileText } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/lib/api';
+import { Job,Resume } from '@/types';
+import { ArrowLeft,Briefcase,Building,FileText,Link2,Loader2,Save } from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function NewApplication() {
   const navigate = useNavigate();

@@ -57,10 +57,12 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
-  # ---- Spring AI - OpenAI ----
+  # ---- Groq chat through Spring AI's OpenAI-compatible client ----
   ai:
+    retry:
+      max-attempts: 1 # Retries must be visible to the credit ledger and workflow recovery.
     openai:
-      api-key: ${OPENAI_API_KEY:test}
+      api-key: ${GROQ_API_KEY:}
       base-url: https://api.groq.com/openai
       chat:
         options:
@@ -80,8 +82,14 @@ spring:
 
 # ---- JWT Configuration ----
 app:
+  ai:
+    audio:
+      api-key: ${OPENAI_API_KEY:}
+      transcription-model: ${OPENAI_TRANSCRIPTION_MODEL:whisper-1}
+      speech-model: ${OPENAI_SPEECH_MODEL:tts-1}
+      voice: ${OPENAI_SPEECH_VOICE:alloy}
   jwt:
-    secret: ${JWT_SECRET:defaultSecretKeyForDevOnlyChangeInProductionMustBe256BitsLong!!}
+    secret: ${JWT_SECRET}
     access-token-expiration-ms: 900000      # 15 minutes
     refresh-token-expiration-ms: 604800000  # 7 days
 
@@ -96,7 +104,7 @@ app:
 
   # ---- SerpAPI ----
   serpapi:
-    api-key: ${SERPAPI_KEY:4c51c08cd30051acf4def1668338d13e53e733f5d78b5b189fd74261cc76285f}
+    api-key: ${SERPAPI_KEY:}
     base-url: https://serpapi.com
 
 # ---- Actuator ----

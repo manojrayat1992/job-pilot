@@ -30,7 +30,7 @@ public class InterviewService {
     private final ResumeRepository resumeRepository;
     private final AiService aiService;
     private final ObjectMapper objectMapper;
-    private final org.springframework.ai.chat.client.ChatClient.Builder chatClientBuilder;
+    private final com.jobpilot.ai.service.ChatGenerationService chatGenerationService;
     private final org.springframework.core.io.ResourceLoader resourceLoader;
 
     private static final Map<String, String> PERSONA_DESCRIPTIONS = Map.of(
@@ -42,6 +42,10 @@ public class InterviewService {
     @Transactional
     public InterviewResponse startInterview(String role, UUID resumeId) {
         UUID userId = SecurityUtils.getCurrentUserId();
+        if (resumeId != null) {
+            resumeRepository.findByIdAndUserId(resumeId, userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Resume", "id", resumeId));
+        }
         
         InterviewSession session = InterviewSession.builder()
                 .userId(userId)
@@ -95,6 +99,7 @@ public class InterviewService {
 
     @Transactional
     public Map<String, Object> processUserAudio(UUID sessionId, MultipartFile audioFile) {
+        getSessionById(sessionId); // Check ownership before any billable audio request.
         // 1. Transcribe audio to text
         String transcribedText = aiService.transcribeAudio(audioFile);
         
@@ -103,14 +108,21 @@ public class InterviewService {
         
         // 3. Generate Speech (TTS) for the agent's response
         String audioBase64 = null;
+        String audioError = null;
         if (textResponse.getLatestMessage() != null) {
-            byte[] speechBytes = aiService.generateSpeech(textResponse.getLatestMessage().getContent());
-            if (speechBytes != null) {
+            try {
+                byte[] speechBytes = aiService.generateSpeech(textResponse.getLatestMessage().getContent());
                 audioBase64 = Base64.getEncoder().encodeToString(speechBytes);
+            } catch (com.jobpilot.common.exception.CreditExhaustedException
+                     | com.jobpilot.common.exception.CreditConflictException
+                     | com.jobpilot.common.exception.AiServiceException
+                     | com.jobpilot.common.exception.FeatureUnavailableException e) {
+                audioError = "Speech playback is unavailable. Your answer was saved; continue with the text response.";
             }
         }
-        
+
         Map<String, Object> result = new HashMap<>();
+        result.put("audioError", audioError);
         result.put("transcribedText", transcribedText);
         result.put("interviewResponse", textResponse);
         result.put("audioBase64", audioBase64);
@@ -125,7 +137,8 @@ public class InterviewService {
     private InterviewResponse processAgentTurn(InterviewSession session, String instruction, String persona) {
         Resume resume = null;
         if (session.getResumeId() != null) {
-            resume = resumeRepository.findById(session.getResumeId()).orElse(null);
+            resume = resumeRepository.findByIdAndUserId(session.getResumeId(), session.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Resume", "id", session.getResumeId()));
         }
         
         String resumeText = resume != null ? resume.getRawText() : "No resume provided.";
@@ -163,13 +176,26 @@ public class InterviewService {
             }
 
             // 2. Call LLM
-            String response = chatClientBuilder.build().prompt().user(template).call().content();
+            String response = chatGenerationService.generate(template).content();
             
             // 3. Clean and parse JSON using robust extractor
-            return com.jobpilot.common.util.JsonExtractor.extractJson(response);
+            Map<String, Object> result = com.jobpilot.common.util.JsonExtractor.extractRequiredJson(response);
+            if ("interview-agent.st".equals(templateFile)) {
+                if (!(result.get("content") instanceof String content) || content.isBlank())
+                    throw new com.jobpilot.common.exception.AiServiceException("Interview response has no content");
+            } else if ("interview-supervisor.st".equals(templateFile)) {
+                if (!(result.get("nextPersona") instanceof String persona) || !PERSONA_DESCRIPTIONS.containsKey(persona)
+                        || !(result.get("instruction") instanceof String instruction) || instruction.isBlank())
+                    throw new com.jobpilot.common.exception.AiServiceException("Invalid interview supervisor response");
+            } else if ("interview-report.st".equals(templateFile) && !(result.get("overallScore") instanceof Number)) {
+                throw new com.jobpilot.common.exception.AiServiceException("Interview report has no score");
+            }
+            return result;
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
         } catch (Exception e) {
             log.error("AI Interview call failed for {}: {}", templateFile, e.getMessage());
-            return Map.of("content", "I'm having a bit of trouble connecting to the panel. Could you repeat that?", "shadowScore", 0);
+            throw new com.jobpilot.common.exception.AiServiceException("Interview AI request failed", e);
         }
     }
 
@@ -222,8 +248,6 @@ public class InterviewService {
     }
 
     private InterviewResponse finalizeInterview(InterviewSession session) {
-        session.setStatus(InterviewSession.InterviewStatus.COMPLETED);
-        
         // 1. Generate Report
         Map<String, Object> variables = Map.of(
             "targetRole", session.getTargetRole(),
@@ -237,9 +261,10 @@ public class InterviewService {
             session.setFeedbackReport(objectMapper.valueToTree(reportData));
             session.setOverallScore(getInt(reportData, "overallScore"));
         } catch (Exception e) {
-            log.error("Failed to save feedback report: {}", e.getMessage());
+            throw new com.jobpilot.common.exception.AiServiceException("Invalid interview report", e);
         }
         
+        session.setStatus(InterviewSession.InterviewStatus.COMPLETED);
         sessionRepository.save(session);
         return getSessionSummary(session);
     }

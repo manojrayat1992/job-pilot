@@ -37,6 +37,8 @@ export interface Resume {
   id: string;
   title: string;
   version: number;
+  parentResumeId?: string;
+  targetJobId?: string;
   active: boolean;
   fileName: string;
   fileType: string;

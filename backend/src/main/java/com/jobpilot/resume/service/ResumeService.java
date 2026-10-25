@@ -32,6 +32,7 @@ public class ResumeService {
     private final FileStorageService fileStorageService;
     private final AiService aiService;
     private final ObjectMapper objectMapper;
+    private final ResumeContentService contentService;
 
     @Transactional
     public ResumeDTO uploadAndParse(MultipartFile file, String title, boolean isTransient) {
@@ -66,8 +67,7 @@ public class ResumeService {
         resume = resumeRepository.save(resume);
         log.info("Resume uploaded and parsed: id={}, user={}", resume.getId(), userId);
 
-        // 6. Trigger async embedding generation
-        aiService.embedResumeAsync(resume.getId(), rawText);
+        // The database queues embeddings when the source transaction commits.
 
         return toDTO(resume);
     }
@@ -86,12 +86,14 @@ public class ResumeService {
                 "projects", java.util.List.of()
         );
 
+        finalJson = contentService.validatedCopy(finalJson);
         Resume resume = Resume.builder()
                 .userId(userId)
                 .title(title != null && !title.isBlank() ? title : "New Resume")
                 .version((int) existingCount + 1)
                 .isActive(existingCount == 0)
                 .parsedJson(finalJson)
+                .rawText(contentService.toText(finalJson))
                 .fileType("application/json")
                 .build();
 
@@ -143,42 +145,54 @@ public class ResumeService {
         return pdfExportService.generatePdf(resume.getParsedJson());
     }
 
-    @Transactional
     public byte[] downloadTailoredPdf(UUID resumeId, String jobDescription) {
-        Resume resume = findByIdAndCurrentUser(resumeId);
-        if (resume.getParsedJson() == null) {
-            throw new BadRequestException("Resume has not been parsed yet");
+        findByIdAndCurrentUser(resumeId);
+        throw new BadRequestException("Create and review a tailoring draft before exporting it.");
+    }
+
+    @Transactional
+    public ResumeDTO createReviewedVersion(Resume source, Map<String, Object> proposed, UUID jobId, String jobText) {
+        if (!SecurityUtils.getCurrentUserId().equals(source.getUserId())) {
+            throw new ResourceNotFoundException("Resume", "id", source.getId());
         }
-        if (jobDescription == null || jobDescription.isBlank()) {
-            return pdfExportService.generatePdf(resume.getParsedJson());
-        }
-        
-        Map<String, Object> tailoredJson = aiService.tailorResume(resume.getParsedJson(), jobDescription);
-        
-        // Save the tailored JSON to the database so the resume itself gets updated/corrected in the app
-        resume.setParsedJson(tailoredJson);
-        resumeRepository.save(resume);
-        
-        return pdfExportService.generatePdf(tailoredJson);
+        var version = newVersion(source, proposed);
+        String title = source.getTitle();
+        version.setTitle(title.substring(0, Math.min(title.length(), 220)) + " (Reviewed)");
+        version.setTargetJobId(jobId);
+        version.setTargetJobDescription(jobText);
+        version = resumeRepository.save(version);
+        return toDTO(version);
+    }
+
+    private Resume newVersion(Resume source, Map<String, Object> proposed) {
+        var clean = contentService.validatedCopy(proposed);
+        return Resume.builder().userId(source.getUserId()).title(source.getTitle())
+                .version(source.getVersion() + 1).parentResumeId(source.getId())
+                .targetJobId(source.getTargetJobId()).targetJobDescription(source.getTargetJobDescription())
+                .parsedJson(clean).rawText(contentService.toText(clean)).fileType("application/json")
+                .templateId(source.getTemplateId()).tags(source.getTags() == null ? null : source.getTags().clone())
+                .isActive(false).isTransient(false).build();
     }
 
     @Transactional
     public ResumeDTO updateResume(UUID resumeId, Map<String, Object> updates) {
         Resume resume = findByIdAndCurrentUser(resumeId);
 
+        boolean contentChanged = updates.containsKey("parsedJson");
+        if (contentChanged) {
+            if (!(updates.get("parsedJson") instanceof Map<?, ?>)) throw new BadRequestException("Invalid resume content.");
+            @SuppressWarnings("unchecked")
+            var proposed = (Map<String, Object>) updates.get("parsedJson");
+            resume = newVersion(resume, proposed);
+        }
         if (updates.containsKey("title")) {
+            if (!(updates.get("title") instanceof String title) || title.isBlank() || title.length() > 255) {
+                throw new BadRequestException("Resume title must be between 1 and 255 characters.");
+            }
             resume.setTitle((String) updates.get("title"));
         }
-        if (updates.containsKey("tags")) {
-            Object tagsObj = updates.get("tags");
-            if (tagsObj instanceof java.util.List<?> list) {
-                resume.setTags(list.stream().map(Object::toString).toArray(String[]::new));
-            }
-        }
-        if (updates.containsKey("parsedJson")) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> newParsed = (Map<String, Object>) updates.get("parsedJson");
-            resume.setParsedJson(newParsed);
+        if (updates.get("tags") instanceof java.util.List<?> list) {
+            resume.setTags(list.stream().map(Object::toString).toArray(String[]::new));
         }
 
         resume = resumeRepository.save(resume);
@@ -213,6 +227,8 @@ public class ResumeService {
                 .id(r.getId().toString())
                 .title(r.getTitle())
                 .version(r.getVersion())
+                .parentResumeId(r.getParentResumeId() == null ? null : r.getParentResumeId().toString())
+                .targetJobId(r.getTargetJobId() == null ? null : r.getTargetJobId().toString())
                 .active(r.getIsActive())
                 .rawText(r.getRawText())
                 .parsedJson(r.getParsedJson())

@@ -1,41 +1,41 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
-import api from '@/lib/api';
-import { ApplicationStats, JobApplication } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Briefcase,
-  Plus,
-  FileText,
-  Sparkles,
-  Search,
-  Brain,
-  ShieldCheck,
-  TrendingUp,
-  Calendar,
-  Target,
-  Zap,
-  DollarSign,
-  Linkedin,
-  Mail,
-  HeartHandshake,
-  GitCompare,
-  ChevronRight,
-  Lock
-} from 'lucide-react';
-import { motion } from 'framer-motion';
 import { PageLoader } from '@/components/loading/PageLoader';
-import { useApiCall } from '@/hooks/useApiCall';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { useApiCall } from '@/hooks/useApiCall';
+import api from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import { ApplicationStats,JobApplication } from '@/types';
+import { motion } from 'framer-motion';
+import {
+Brain,
+Briefcase,
+Calendar,
+ChevronRight,
+DollarSign,
+FileText,
+GitCompare,
+HeartHandshake,
+Linkedin,
+Lock,
+Mail,
+Plus,
+Search,
+ShieldCheck,
+Sparkles,
+Target,
+TrendingUp,
+Zap
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate,useSearchParams } from 'react-router-dom';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const { user, setAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const [stats, setStats] = useState<ApplicationStats | null>(null);
   const [recentApplications, setRecentApplications] = useState<JobApplication[]>([]);
   const { execute, isLoading } = useApiCall();
@@ -44,15 +44,7 @@ export default function Dashboard() {
     fetchDashboardData();
     
     if (searchParams.get('success') === 'true') {
-      toast({
-        title: 'Payment Successful! 🎉',
-        description: 'You are now a PRO member with unlimited access.',
-      });
-      // Try to re-fetch user profile to update role, or just optimistically update for now
-      if (user) {
-        setAuth({ ...user, role: 'PRO' }, useAuthStore.getState().accessToken, useAuthStore.getState().refreshToken);
-      }
-      // Remove query param
+      toast({ title: 'Checkout returned', description: 'A return URL does not confirm payment. Check your account status.' });
       navigate('/dashboard', { replace: true });
     }
   }, [searchParams]);

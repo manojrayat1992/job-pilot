@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, GitCompare } from 'lucide-react';
+import api from '@/lib/api';
+import { ArrowLeft,GitCompare,Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function ResumeDiff() {

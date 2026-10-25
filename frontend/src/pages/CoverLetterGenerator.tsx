@@ -1,23 +1,20 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { Resume, Job } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, 
-  Loader2, 
-  FileText, 
-  Sparkles, 
-  Download, 
-  Copy,
-  Languages,
-  Zap,
-  Briefcase
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { AiFeedback } from '@/components/ai/AiFeedback';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import api from '@/lib/api';
+import { Job,Resume } from '@/types';
+import {
+ArrowLeft,
+Copy,
+Download,
+Languages,
+Loader2,
+Sparkles,
+Zap
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function CoverLetterGenerator() {
   const navigate = useNavigate();

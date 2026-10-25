@@ -1,29 +1,32 @@
-import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import WorkflowHistory from '@/components/agents/WorkflowHistory';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  ArrowLeft,
-  Loader2,
-  Send,
-  Sparkles,
-  Search,
-  PenTool,
-  Mic,
-  Mail,
-  BarChart3,
-  Target,
-  Zap,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  Bot
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/lib/api';
+import { API_BASE_URL } from '@/lib/config';
+import { useAuthStore } from '@/store/authStore';
+import { AnimatePresence,motion } from 'framer-motion';
+import {
+AlertCircle,
+ArrowLeft,
+BarChart3,
+Bot,
+CheckCircle2,
+Clock,
+Loader2,
+Mail,
+Mic,
+PenTool,
+Search,
+Send,
+Sparkles,
+Target,
+Zap
+} from 'lucide-react';
+import { useEffect,useRef,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const AGENTS = [
   { id: 'ORCHESTRATOR', name: 'Orchestrator', emoji: '🎯', color: 'from-slate-600 to-slate-800', icon: Target },
@@ -35,9 +38,9 @@ const AGENTS = [
 ];
 
 const WORKFLOWS = [
-  { type: 'AUTO_PILOT', label: 'Auto-Pilot', desc: 'Find → Tailor → Apply', icon: Zap, color: 'border-indigo-200 bg-indigo-50 text-indigo-700' },
+  { type: 'AUTO_PILOT', label: 'Auto-Pilot', desc: 'Find → Review → Prepare', icon: Zap, color: 'border-indigo-200 bg-indigo-50 text-indigo-700' },
   { type: 'INTERVIEW_BLITZ', label: 'Interview Blitz', desc: 'Research → Prep → Practice', icon: Mic, color: 'border-rose-200 bg-rose-50 text-rose-700' },
-  { type: 'STEALTH_NETWORKING', label: 'Stealth Networking', desc: 'Scout → Connect → Outreach', icon: Mail, color: 'border-amber-200 bg-amber-50 text-amber-700' },
+  { type: 'STEALTH_NETWORKING', label: 'Stealth Networking', desc: 'Plan → Draft → Review', icon: Mail, color: 'border-amber-200 bg-amber-50 text-amber-700' },
 ];
 
 interface OrchestrationResult {
@@ -45,7 +48,11 @@ interface OrchestrationResult {
   workflowType: string;
   status: string;
   thoughts: string[];
-  finalReport: string;
+  finalReport?: string;
+  userGoal?: string;
+  retryable?: boolean;
+  error?: string;
+  steps?: { stepId: string; action: string; status: string; attempts: number; error?: string; model?: string }[];
   durationMs: number;
   artifacts?: Record<string, any>;
 }
@@ -63,13 +70,49 @@ export default function AgentCommandCenter() {
   const [result, setResult] = useState<OrchestrationResult | null>(null);
   const [visibleThoughts, setVisibleThoughts] = useState<string[]>([]);
   const [useStreaming, setUseStreaming] = useState(true);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const startRequest = useRef<{ body: string; id: string } | null>(null);
+  const getStartRequest = () => {
+    const body = JSON.stringify({ goal, workflowType: selectedWorkflow || undefined,
+      targetCompany: targetCompany || undefined, targetRole: targetRole || undefined });
+    if (!startRequest.current || startRequest.current.body !== body)
+      startRequest.current = { body, id: crypto.randomUUID() };
+    return { ...JSON.parse(body), requestId: startRequest.current.id };
+  };
+  const openSaved = async (id: string) => {
+    try {
+      const response = await api.get(`/api/v1/agents/workflows/${id}`);
+      const saved: OrchestrationResult = response.data.data;
+      setResult(saved);
+      setVisibleThoughts(saved.thoughts);
+    } catch {
+      toast({ title: 'Unable to open workflow', description: 'Please refresh your saved workflow history.', variant: 'destructive' });
+    }
+  };
+  const viewedRunId = result?.workflowId;
+  const viewedStatus = result?.status;
+  useEffect(() => {
+    if (isExecuting || !viewedRunId || !viewedStatus || !['RUNNING', 'PENDING'].includes(viewedStatus)) return;
+    let active = true;
+    const id = viewedRunId;
+    const timer = window.setInterval(() => {
+      api.get(`/api/v1/agents/workflows/${id}`).then(response => {
+        if (active) {
+          setResult(response.data.data);
+          setVisibleThoughts(response.data.data.thoughts);
+        }
+      }).catch(() => {});
+    }, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [viewedRunId, viewedStatus, isExecuting]);
 
   useEffect(() => {
     thoughtsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [visibleThoughts]);
 
-  const executeWorkflowStreaming = async () => {
-    if (!goal.trim()) {
+  const executeWorkflowStreaming = async (retryId?: string) => {
+    if (isExecuting) return;
+    if (!retryId && !goal.trim()) {
       toast({ title: 'Goal Required', description: 'Tell the agents what you want to achieve.', variant: 'destructive' });
       return;
     }
@@ -77,23 +120,20 @@ export default function AgentCommandCenter() {
     setIsExecuting(true);
     setResult(null);
     setVisibleThoughts([]);
+    let runId = retryId;
 
     try {
-      const token = localStorage.getItem('token');
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      const token = useAuthStore.getState().accessToken;
+      const baseUrl = API_BASE_URL;
       
-      const response = await fetch(`${baseUrl}/api/v1/agents/orchestrate/stream`, {
+      const url = retryId ? `/api/v1/agents/workflows/${retryId}/retry/stream` : '/api/v1/agents/orchestrate/stream';
+      const response = await fetch(`${baseUrl}${url}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          goal,
-          workflowType: selectedWorkflow || undefined,
-          targetCompany: targetCompany || undefined,
-          targetRole: targetRole || undefined,
-        }),
+        body: retryId ? undefined : JSON.stringify(getStartRequest()),
       });
 
       if (!response.ok) {
@@ -108,6 +148,7 @@ export default function AgentCommandCenter() {
       }
 
       let buffer = '';
+      let receivedTerminalEvent = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -118,31 +159,33 @@ export default function AgentCommandCenter() {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
+          if (line.startsWith('data:')) {
+            const data = line.slice(5).trimStart();
             if (data === '[DONE]') continue;
 
             try {
               const event = JSON.parse(data);
               
               if (event.type === 'workflow_start') {
+                runId = event.workflowId;
+                startRequest.current = null;
+                setHistoryRefresh(value => value + 1);
                 setVisibleThoughts(prev => [...prev, `[ORCHESTRATOR] Starting workflow: ${event.workflowType}`]);
               } else if (event.type === 'thought') {
                 setVisibleThoughts(prev => [...prev, `[${event.agent}] ${event.thought}`]);
               } else if (event.type === 'workflow_complete') {
-                setResult({
-                  workflowId: event.workflowId,
-                  workflowType: event.workflowType,
-                  status: 'COMPLETED',
-                  thoughts: visibleThoughts,
-                  finalReport: event.finalReport,
-                  durationMs: event.durationMs,
-                  artifacts: event.artifacts,
-                });
-                toast({ title: '✅ Workflow Complete', description: `Finished in ${(event.durationMs / 1000).toFixed(1)}s` });
+                receivedTerminalEvent = true;
+                setResult(event);
+                setVisibleThoughts(event.thoughts || []);
+                startRequest.current = null;
+                toast(event.status === 'COMPLETED'
+                  ? { title: 'Workflow Complete', description: `Finished in ${(event.durationMs / 1000).toFixed(1)}s` }
+                  : ['RUNNING', 'PENDING'].includes(event.status)
+                    ? { title: 'Workflow in progress', description: 'Progress is saved. Open history to check the latest steps.' }
+                    : { title: 'Workflow stopped', description: 'Open saved workflow history to resume unfinished steps.', variant: 'destructive' });
               } else if (event.type === 'error') {
-                toast({ title: 'Workflow Failed', description: event.message, variant: 'destructive' });
-                setIsExecuting(false);
+                toast({ title: 'Check saved workflow', description: event.message, variant: 'destructive' });
+                if (event.workflowId) await openSaved(event.workflowId);
                 return;
               }
             } catch (e) {
@@ -151,15 +194,19 @@ export default function AgentCommandCenter() {
           }
         }
       }
+      if (!receivedTerminalEvent) throw new Error('Workflow stream ended before a result was received');
     } catch (err) {
       console.error('Streaming error:', err);
-      toast({ title: 'Workflow Failed', description: 'An agent encountered an error.', variant: 'destructive' });
+      toast({ title: 'Live connection interrupted', description: 'Your saved workflow may still be running. Open its history to check progress.', variant: 'destructive' });
+      if (runId) await openSaved(runId);
     } finally {
       setIsExecuting(false);
+      setHistoryRefresh(value => value + 1);
     }
   };
 
   const executeWorkflowSync = async () => {
+    if (isExecuting) return;
     if (!goal.trim()) {
       toast({ title: 'Goal Required', description: 'Tell the agents what you want to achieve.', variant: 'destructive' });
       return;
@@ -170,12 +217,8 @@ export default function AgentCommandCenter() {
     setVisibleThoughts([]);
 
     try {
-      const response = await api.post('/api/v1/agents/orchestrate', {
-        goal,
-        workflowType: selectedWorkflow || undefined,
-        targetCompany: targetCompany || undefined,
-        targetRole: targetRole || undefined,
-      });
+      const response = await api.post('/api/v1/agents/orchestrate', getStartRequest());
+      startRequest.current = null;
 
       const data: OrchestrationResult = response.data.data;
       setResult(data);
@@ -188,11 +231,16 @@ export default function AgentCommandCenter() {
         }
       }
 
-      toast({ title: '✅ Workflow Complete', description: `Finished in ${(data.durationMs / 1000).toFixed(1)}s` });
+      toast(data.status === 'COMPLETED'
+        ? { title: 'Workflow Complete', description: `Finished in ${(data.durationMs / 1000).toFixed(1)}s` }
+        : ['RUNNING', 'PENDING'].includes(data.status)
+          ? { title: 'Workflow in progress', description: 'Progress is saved. Open history to check the latest steps.' }
+          : { title: 'Workflow stopped', description: 'Open saved workflow history to resume unfinished steps.', variant: 'destructive' });
     } catch (err) {
-      toast({ title: 'Workflow Failed', description: 'An agent encountered an error.', variant: 'destructive' });
+      toast({ title: 'Check saved workflow', description: 'The request did not return a result. Open history to check whether work is still running.', variant: 'destructive' });
     } finally {
       setIsExecuting(false);
+      setHistoryRefresh(value => value + 1);
     }
   };
 
@@ -351,6 +399,7 @@ export default function AgentCommandCenter() {
                 </Button>
               </CardContent>
             </Card>
+            <WorkflowHistory refreshKey={historyRefresh} disabled={isExecuting} onOpen={openSaved} />
           </div>
 
           {/* Right Panel — Agent Activity Feed */}
@@ -395,9 +444,13 @@ export default function AgentCommandCenter() {
                       <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 font-bold text-sm">
                         <CheckCircle2 className="h-4 w-4" /> Workflow Complete
                       </div>
+                    ) : result && ['RUNNING', 'PENDING'].includes(result.status) ? (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-full font-bold text-sm">
+                        <Clock className="h-4 w-4" /> Workflow in progress
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-full border border-red-200 font-bold text-sm">
-                        <AlertCircle className="h-4 w-4" /> Workflow Failed
+                        <AlertCircle className="h-4 w-4" /> Workflow {result?.status === 'INTERRUPTED' ? 'interrupted' : 'stopped'}
                       </div>
                     )}
                     {result && (
@@ -460,8 +513,31 @@ export default function AgentCommandCenter() {
                   </CardContent>
                 </Card>
 
+                {result && !isExecuting && (
+                  <Card className="rounded-3xl border-slate-200">
+                    <CardContent className="p-6 space-y-4">
+                      <h3 className="font-bold text-slate-800">{result.userGoal || 'Saved workflow'}</h3>
+                      <p className="text-sm text-slate-500">Status: {result.status}</p>
+                      {result.error && <p role="alert" className="text-sm text-red-600">{result.error}</p>}
+                      <ol className="space-y-2">
+                        {result.steps?.map(step => (
+                          <li key={step.stepId} className="rounded-xl bg-slate-50 p-3 text-sm">
+                            <span className="font-medium">{step.action}</span> — {step.status}
+                            <span className="text-slate-500"> · Attempts: {step.attempts}</span>
+                            {step.error && <p className="mt-1 text-red-600">{step.error}</p>}
+                          </li>
+                        ))}
+                      </ol>
+                      {result.retryable && <div className="space-y-2">
+                        <p className="text-xs text-slate-500">Saved steps and model responses are reused. Calls with an unknown outcome need support reconciliation before retry; a later provider attempt can incur usage.</p>
+                        <Button onClick={() => executeWorkflowStreaming(result.workflowId)}>Resume unfinished steps</Button>
+                      </div>}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Final Report */}
-                {result?.finalReport && !isExecuting && (
+                {result && !isExecuting && (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
                     <Card className="rounded-3xl border-slate-200 shadow-sm">
                       <CardContent className="p-8">
@@ -470,12 +546,12 @@ export default function AgentCommandCenter() {
                             <Sparkles className="h-5 w-5 text-white" />
                           </div>
                           <div>
-                            <h3 className="text-lg font-black text-slate-900">Executive Summary</h3>
+                            <h3 className="text-lg font-black text-slate-900">{result.status === 'COMPLETED' ? 'Executive Summary' : 'Saved outputs'}</h3>
                             <p className="text-xs text-slate-400 font-medium">Compiled by the Orchestrator Agent</p>
                           </div>
                         </div>
                         <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed whitespace-pre-wrap mb-8">
-                          {result.finalReport}
+                          {result.finalReport || 'Completed outputs are saved below for review. Check the step list for current progress.'}
                         </div>
                         
                         {/* Agent Action Outputs (Artifacts) */}
@@ -484,6 +560,23 @@ export default function AgentCommandCenter() {
                             <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                               <Zap className="h-4 w-4 text-indigo-500" /> Generated Artifacts & Actions
                             </h4>
+                            <div className="space-y-4 mb-4">
+                              {[
+                                ['resumeSuggestions', 'Resume suggestions'],
+                                ['questions', 'Practice questions'],
+                                ['thankYouDraft', 'Thank-you email draft'],
+                                ['emailDraft', 'Outreach draft'],
+                                ['followUpDraft', 'Follow-up draft'],
+                                ['companyInsights', 'Company background'],
+                                ['salaryAdvice', 'Compensation guidance'],
+                                ['cultureAnalysis', 'Fit questions'],
+                              ].map(([key, label]) => typeof result.artifacts?.[key] === 'string' && (
+                                <div key={key}>
+                                  <h5 className="font-semibold text-slate-800">{label}</h5>
+                                  <p className="whitespace-pre-wrap text-sm text-slate-600">{result.artifacts[key]}</p>
+                                </div>
+                              ))}
+                            </div>
                             <div className="flex flex-wrap gap-3">
                               {result.artifacts.scoutedJobs && (
                                 <Button onClick={() => navigate('/jobs')} variant="outline" className="rounded-xl border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-bold">

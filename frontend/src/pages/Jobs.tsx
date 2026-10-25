@@ -11,8 +11,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Label } from '@/components/ui/label';
 
+interface IndexTask { entity_id: string; kind: string; status: string; attempts: number }
+
 export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [indexTasks, setIndexTasks] = useState<IndexTask[]>([]);
+  const [indexError, setIndexError] = useState(false);
+  const [retryingIndex, setRetryingIndex] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [jdText, setJdText] = useState('');
@@ -24,6 +29,9 @@ export default function Jobs() {
 
   useEffect(() => {
     fetchJobs();
+    fetchIndex();
+    const timer = window.setInterval(fetchIndex, 10000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const fetchJobs = async () => {
@@ -35,6 +43,24 @@ export default function Jobs() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchIndex = async () => {
+    try {
+      const response = await api.get('/api/v1/search/indexing');
+      setIndexTasks(response.data.data);
+      setIndexError(false);
+    } catch { setIndexError(true); }
+  };
+
+  const retryIndex = async (id: string) => {
+    setRetryingIndex(id);
+    try {
+      await api.post(`/api/v1/search/indexing/JOB/${id}/retry`);
+      await fetchIndex();
+      toast({ title: 'Search preparation queued' });
+    } catch { toast({ title: 'Could not retry search preparation', variant: 'destructive' }); }
+    finally { setRetryingIndex(null); }
   };
 
   const analyzeJob = async () => {
@@ -49,7 +75,8 @@ export default function Jobs() {
         url: jobUrl.trim() || undefined,
         title: jobTitle || undefined
       });
-      toast({ title: 'Success', description: 'Job analyzed successfully' });
+      toast({ title: 'Job saved', description: 'An existing listing is reused when its source matches.' });
+      fetchIndex();
       setOpen(false);
       setJdText('');
       setJobUrl('');
@@ -79,7 +106,7 @@ export default function Jobs() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Job Descriptions</h2>
-          <p className="text-muted-foreground">Store and analyze JDs for application matching.</p>
+          <p className="text-muted-foreground">Save job descriptions for matching. Search preparation runs after saving.</p>
         </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
@@ -136,6 +163,7 @@ export default function Jobs() {
         </Dialog>
       </div>
 
+      {indexError && <p role="status" className="text-sm text-amber-700">Search preparation status is temporarily unavailable.</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {jobs.map((job) => (
           <Card key={job.id} className="flex flex-col h-full hover:shadow-md transition-shadow">
@@ -149,6 +177,14 @@ export default function Jobs() {
               <div className="flex items-center text-sm text-muted-foreground mt-1 gap-4">
                 <span className="flex items-center"><Building className="h-3 w-3 mr-1" /> {job.company || 'Unknown'}</span>
                 <span className="flex items-center"><MapPin className="h-3 w-3 mr-1" /> {job.location || 'Any'}</span>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <Badge variant="outline">{indexError ? 'Search status unavailable' : (() => {
+                  const task = indexTasks.find(task => task.kind === 'JOB' && task.entity_id === job.id);
+                  return task?.status === 'COMPLETED' ? 'Search prepared' : task?.status === 'FAILED' ? 'Search preparation failed' : task ? 'Preparing search' : 'Search status unavailable';
+                })()}</Badge>
+                {indexTasks.some(task => task.kind === 'JOB' && task.entity_id === job.id && task.status === 'FAILED') &&
+                  <Button size="sm" variant="outline" disabled={retryingIndex !== null} onClick={() => retryIndex(job.id)}>Retry</Button>}
               </div>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-between">

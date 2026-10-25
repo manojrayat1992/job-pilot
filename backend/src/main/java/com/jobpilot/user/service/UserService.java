@@ -19,6 +19,7 @@ import java.util.UUID;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final com.jobpilot.ai.service.CreditService creditService;
 
     public UserDTO getCurrentUser() {
         UUID userId = SecurityUtils.getCurrentUserId();
@@ -83,7 +84,7 @@ public class UserService {
                 .targetRole(user.getTargetRole())
                 .currentOrg(user.getCurrentOrg())
                 .targetSalary(user.getTargetSalary())
-                .credits(user.getCredits())
+                .credits(creditService.getRemainingCredits(user.getId()))
                 .createdAt(user.getCreatedAt())
                 .build();
     }

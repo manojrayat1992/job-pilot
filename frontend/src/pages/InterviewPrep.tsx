@@ -1,23 +1,22 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { Resume, Job } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { 
-  ArrowLeft, 
-  Loader2, 
-  MessageSquare, 
-  Sparkles, 
-  Lightbulb,
-  Mic,
-  Brain
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { AiFeedback } from '@/components/ai/AiFeedback';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import api from '@/lib/api';
+import { Job,Resume } from '@/types';
 import { motion } from 'framer-motion';
+import {
+ArrowLeft,
+Brain,
+Lightbulb,
+Loader2,
+MessageSquare,
+Mic,
+Sparkles
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function InterviewPrep() {
   const navigate = useNavigate();

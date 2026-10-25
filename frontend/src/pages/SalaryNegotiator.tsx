@@ -1,13 +1,20 @@
-import { useState } from 'react';
-import api from '@/lib/api';
+import { AiFeedback } from '@/components/ai/AiFeedback';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { AiFeedback } from '@/components/ai/AiFeedback';
-import {
-  DollarSign, TrendingUp, Target, ArrowLeft, Loader2, Sparkles,
-  BadgeDollarSign, BarChart3, Lightbulb, Shield
-} from 'lucide-react';
+import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import {
+ArrowLeft,
+BadgeDollarSign,BarChart3,
+DollarSign,
+Lightbulb,
+Loader2,
+Shield,
+Sparkles,
+Target,
+TrendingUp
+} from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function SalaryNegotiator() {
@@ -34,7 +41,7 @@ export default function SalaryNegotiator() {
       setResult(res.data.data);
     } catch (error: any) {
       if (error.response?.status === 402) {
-        toast({ title: 'Credits Exhausted', description: 'Upgrade to Pro for unlimited AI access.', variant: 'destructive' });
+        toast({ title: 'Credits Exhausted', description: 'Paid upgrades are currently unavailable.', variant: 'destructive' });
       } else {
         toast({ title: 'Analysis Failed', description: 'Please try again.', variant: 'destructive' });
       }

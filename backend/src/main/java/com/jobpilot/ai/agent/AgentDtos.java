@@ -21,11 +21,15 @@ public class AgentDtos {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class OrchestrationRequest {
+        @jakarta.validation.constraints.NotBlank
+        @jakarta.validation.constraints.Size(max = 4000)
         private String goal;            // Natural language goal from user
         private String workflowType;    // Optional: AUTO_PILOT, INTERVIEW_BLITZ, STEALTH_NETWORKING
+        private UUID requestId;         // Client key for deduplicating repeated start requests
         private UUID resumeId;          // Optional context
         private UUID jobId;             // Optional context
         private String targetCompany;   // Optional context
+        @jakarta.validation.constraints.Size(max = 200)
         private String targetRole;      // Optional context
         private Map<String, Object> extra; // Any additional parameters
     }
@@ -40,6 +44,10 @@ public class AgentDtos {
         private String workflowId;
         private String workflowType;
         private String status;
+        private String userGoal;
+        private java.time.Instant createdAt;
+        private boolean retryable;
+        private String error;
         private String plan;
         private List<StepResult> steps;
         private List<String> thoughts;
@@ -58,6 +66,9 @@ public class AgentDtos {
         private String agentEmoji;
         private String action;
         private String status;
+        private int attempts;
+        private String error;
+        private String model;
         private String summary;
         private long durationMs;
     }

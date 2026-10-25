@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
-import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Linkedin, ArrowLeft, Loader2, Sparkles, Target, CheckCircle2,
-  AlertCircle, ChevronRight, Copy
-} from 'lucide-react';
+import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import {
+AlertCircle,
+ArrowLeft,
+CheckCircle2,
+Copy,
+Linkedin,
+Loader2,Sparkles,Target
+} from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function LinkedInOptimizer() {
@@ -27,7 +31,7 @@ export default function LinkedInOptimizer() {
       setResult(res.data.data);
     } catch (error: any) {
       if (error.response?.status === 402) {
-        toast({ title: 'Credits Exhausted', description: 'Upgrade to Pro for unlimited AI access.', variant: 'destructive' });
+        toast({ title: 'Credits Exhausted', description: 'Paid upgrades are currently unavailable.', variant: 'destructive' });
       } else {
         toast({ title: 'Optimization Failed', description: 'Please try again.', variant: 'destructive' });
       }

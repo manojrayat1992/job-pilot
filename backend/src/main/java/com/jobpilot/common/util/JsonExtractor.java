@@ -29,6 +29,14 @@ public final class JsonExtractor {
 
     private JsonExtractor() {}
 
+    public static Map<String, Object> extractRequiredJson(String response) {
+        Map<String, Object> result = extractJson(response);
+        if (result.isEmpty() || Boolean.TRUE.equals(result.get("rawResponse"))) {
+            throw new com.jobpilot.common.exception.AiServiceException("AI returned invalid structured output");
+        }
+        return result;
+    }
+
     /**
      * Extracts a JSON Map from an LLM response string.
      * Strategy order:
@@ -76,8 +84,7 @@ public final class JsonExtractor {
         if (result != null) return result;
 
         // Strategy 4: Fallback — wrap raw text
-        log.warn("No valid JSON found in AI response, wrapping raw text. First 200 chars: {}",
-                cleaned.substring(0, Math.min(200, cleaned.length())));
+        log.warn("No valid JSON found in AI response");
         return Map.of(
                 "content", cleaned,
                 "answer", cleaned,

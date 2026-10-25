@@ -1,14 +1,14 @@
-import * as React from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
+import { AnimatePresence,motion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
+import * as React from "react";
 
 const AccordionContext = React.createContext<{
   activeValue: string | null;
   setActiveValue: (value: string | null) => void;
 }>({ activeValue: null, setActiveValue: () => {} });
 
-const Accordion = ({ children, className, type, collapsible, defaultValue }: any) => {
+const Accordion = ({ children, className, defaultValue }: any) => {
   const [activeValue, setActiveValue] = React.useState<string | null>(defaultValue || null);
   return (
     <AccordionContext.Provider value={{ activeValue, setActiveValue }}>
@@ -18,7 +18,7 @@ const Accordion = ({ children, className, type, collapsible, defaultValue }: any
 };
 
 const AccordionItem = ({ value, children, className }: any) => {
-  const { activeValue, setActiveValue } = React.useContext(AccordionContext);
+  const { activeValue } = React.useContext(AccordionContext);
   const isOpen = activeValue === value;
 
   return (
@@ -80,4 +80,4 @@ const AccordionContent = ({ className, children, "data-state": state, ...props }
   )
 };
 
-export { Accordion, AccordionItem, AccordionTrigger, AccordionContent }
+export { Accordion,AccordionContent,AccordionItem,AccordionTrigger };

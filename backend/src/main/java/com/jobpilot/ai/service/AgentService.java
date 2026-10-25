@@ -1,7 +1,5 @@
 package com.jobpilot.ai.service;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobpilot.ai.dto.AgentAutoApplyRequest;
 import com.jobpilot.ai.dto.AgentResearchRequest;
@@ -16,8 +14,6 @@ import com.jobpilot.resume.entity.Resume;
 import com.jobpilot.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -27,13 +23,14 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AgentService {
 
-    private final ChatClient.Builder chatClientBuilder;
+    private final ChatGenerationService chatGenerationService;
     private final EmbeddingService embeddingService;
     private final JobRepository jobRepository;
     private final ResumeRepository resumeRepository;
     private final ObjectMapper objectMapper;
     private final SerpApiClient serpApiClient;
     private final ApplicationRepository applicationRepository;
+    private final com.jobpilot.job.service.JobWriter jobWriter;
 
     public AgentResearchResponse researchJobs(AgentResearchRequest request) {
         UUID userId = SecurityUtils.getCurrentUserId();
@@ -42,7 +39,8 @@ public class AgentService {
         // 1. Fetch Resume Context
         Resume resume = null;
         if (request.getResumeId() != null) {
-            resume = resumeRepository.findByIdAndUserId(request.getResumeId(), userId).orElse(null);
+            resume = resumeRepository.findByIdAndUserId(request.getResumeId(), userId)
+                    .orElseThrow(() -> new com.jobpilot.common.exception.ResourceNotFoundException("Resume", "id", request.getResumeId()));
         }
         String resumeText = resume != null ? resume.getRawText() : "No resume provided.";
 
@@ -83,173 +81,73 @@ public class AgentService {
     }
 
     private AgentResearchResponse compileFinalReport(String query, String resumeText, List<Job> internalJobs, List<Map<String, Object>> webJobs, List<String> thoughts) {
-        // Truncate resume text to keep total prompt size manageable
-        String truncatedResume = truncate(resumeText, 2000);
-
-        // Combine all jobs for the LLM to rank, with truncated descriptions
-        StringBuilder jobsContext = new StringBuilder();
-        int count = 1;
-        for (Job j : internalJobs) {
-            jobsContext.append(String.format("Job %d (Internal):\nTitle: %s\nCompany: %s\nDescription: %s\n\n", 
-                count++, j.getTitle(), j.getCompany(), truncate(j.getRawText(), 500)));
-        }
-        for (Map<String, Object> j : webJobs) {
-            jobsContext.append(String.format("Job %d (Web):\nTitle: %s\nCompany: %s\nURL: %s\nDescription: %s\n\n", 
-                count++, j.get("title"), j.get("company"), j.get("url"), truncate((String) j.get("description"), 500)));
-        }
-
-        String prompt = String.format("""
-            You are a Job Research Agent. Below is a user query, their resume (truncated), and a list of jobs found.
-            
-            User Query: %s
-            
-            Resume: %s
-            
-            Jobs Found:
-            %s
-            
-            Your Task:
-            1. Analyze how well each job fits the user's resume and query.
-            2. Produce a professional summary report (1 paragraph max).
-            3. Return ONLY a valid JSON object.
-            4. Include only the TOP 10 most relevant jobs to keep the response within limits.
-            5. Be extremely concise in 'matchReason' and 'description' (max 2 short sentences each).
-            
-            JSON Structure:
-            {
-              "report": "Overall analysis...",
-              "jobs": [
-                {
-                  "title": "...",
-                  "company": "...",
-                  "location": "...",
-                  "url": "...",
-                  "description": "...",
-                  "matchScore": 85,
-                  "matchReason": "Why it fits...",
-                  "source": "Internal/Web"
-                }
-              ]
-            }
-            """, query, truncatedResume, jobsContext.toString());
-
+        // The model ranks stable candidates; listing identity/content comes from the actual source.
+        var candidates = new LinkedHashMap<String, AgentResearchResponse.RankedJob>();
+        for (var job : internalJobs) candidates.put("candidate-" + candidates.size(), AgentResearchResponse.RankedJob.builder()
+                .id(job.getId()).title(job.getTitle()).company(job.getCompany()).location(job.getLocation())
+                .url(job.getSourceUrl()).description(job.getRawText()).source("Internal").build());
+        for (var job : webJobs.stream().limit(10).toList()) candidates.put("candidate-" + candidates.size(), AgentResearchResponse.RankedJob.builder()
+                .title(Objects.toString(job.get("title"), "Untitled role")).company(Objects.toString(job.get("company"), "Unknown company"))
+                .location(Objects.toString(job.get("location"), "")).url(Objects.toString(job.get("url"), ""))
+                .description(Objects.toString(job.get("description"), "")).source("Web").build());
+        if (candidates.isEmpty()) return AgentResearchResponse.builder().report("No job listings were found.").jobs(List.of()).thoughts(thoughts).build();
         try {
-            ChatClient chatClient = chatClientBuilder
-                .defaultOptions(OpenAiChatOptions.builder()
-                    .withModel("llama-3.1-8b-instant")
-                    .withMaxTokens(2000)
-                    .withTemperature(0.7)
-                    .build())
-                .build();
-            
-            String response = chatClient.prompt().user(prompt).call().content();
-            log.debug("Agent Raw Response: {}", response);
-            
-            // Extract JSON - handle cases where LLM might wrap in markdown
-            String cleaned = response.trim();
-            if (cleaned.contains("```json")) {
-                cleaned = cleaned.substring(cleaned.indexOf("```json") + 7);
-                if (cleaned.contains("```")) {
-                    cleaned = cleaned.substring(0, cleaned.lastIndexOf("```"));
-                }
-            } else {
-                int start = cleaned.indexOf('{');
-                int end = cleaned.lastIndexOf('}');
-                if (start != -1 && end != -1) cleaned = cleaned.substring(start, end + 1);
+            var promptCandidates = new ArrayList<Map<String,Object>>();
+            candidates.forEach((key,job) -> promptCandidates.add(Map.of("candidateId",key,"title",Objects.toString(job.getTitle(),""),
+                    "company",Objects.toString(job.getCompany(),""),"description",truncate(job.getDescription(),1000))));
+            String prompt = "Rank only these job candidates for the query and resume. Return JSON with report and jobs (at most 10). "
+                    + "Each jobs item must contain candidateId copied exactly, matchScore (0-100), and matchReason. Do not invent candidates.\nQuery: "
+                    + query + "\nResume: " + truncate(resumeText,2000) + "\nCandidates: " + objectMapper.writeValueAsString(promptCandidates);
+            var result = chatGenerationService.generate(null,prompt,2000,0.7);
+            var parsed = com.jobpilot.common.util.JsonExtractor.extractRequiredJson(result.content());
+            if (!(parsed.get("jobs") instanceof List<?> rankings)) throw new AiServiceException("Missing candidate rankings");
+            var selected = new ArrayList<AgentResearchResponse.RankedJob>();
+            var seen = new HashSet<String>();
+            for (Object item : rankings.stream().limit(10).toList()) {
+                if (!(item instanceof Map<?,?> ranking) || !(ranking.get("candidateId") instanceof String key) || !candidates.containsKey(key))
+                    throw new AiServiceException("Ranking referenced an unknown candidate");
+                if (!seen.add(key)) continue;
+                var job = candidates.get(key);
+                job.setMatchScore(ranking.get("matchScore") instanceof Number number ? Math.max(0,Math.min(100,number.intValue())) : null);
+                job.setMatchReason(Objects.toString(ranking.get("matchReason"),""));
+                selected.add(job);
             }
-            cleaned = cleaned.trim();
-            
-            // Use a more lenient mapper for AI-generated JSON
-            ObjectMapper aiMapper = new ObjectMapper();
-            aiMapper.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
-            aiMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
-            aiMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
-            aiMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            
-            Map<String, Object> parsed = aiMapper.readValue(cleaned, Map.class);
-            
-            List<Map<String, Object>> jobsData = (List<Map<String, Object>>) parsed.get("jobs");
-            List<AgentResearchResponse.RankedJob> rankedJobs = jobsData.stream()
-                .map(m -> AgentResearchResponse.RankedJob.builder()
-                    .title((String) m.get("title"))
-                    .company((String) m.get("company"))
-                    .location((String) m.get("location"))
-                    .url((String) m.get("url"))
-                    .description((String) m.get("description"))
-                    .matchScore(m.get("matchScore") != null ? ((Number) m.get("matchScore")).intValue() : 0)
-                    .matchReason((String) m.get("matchReason"))
-                    .source((String) m.get("source"))
-                    .build())
-                .toList();
-
-            // Automatically save web results to the internal database so they appear in "Jobs"
-            UUID userId = SecurityUtils.getCurrentUserId();
-            rankedJobs.stream()
-                .filter(rj -> "Web".equalsIgnoreCase(rj.getSource()))
-                .forEach(rj -> {
-                    if (rj.getUrl() != null && !jobRepository.existsByUserIdAndSourceUrl(userId, rj.getUrl())) {
-                        createNewJob(userId, rj);
-                    }
-                });
-
-            return AgentResearchResponse.builder()
-                .report((String) parsed.get("report"))
-                .jobs(rankedJobs)
-                .thoughts(thoughts)
-                .build();
-        } catch (Exception e) {
-            log.error("Agent failed to compile report", e);
-            throw new AiServiceException("Agent failed to compile report: " + e.getMessage(), e);
-        }
+            // Validate every candidate before creating records; generated URLs/descriptions are never persisted.
+            UUID user = SecurityUtils.getCurrentUserId();
+            for (var job : selected) if (job.getId()==null) job.setId(createNewJob(user,job).getId());
+            return AgentResearchResponse.builder().report(Objects.toString(parsed.get("report"),""))
+                    .jobs(selected).thoughts(thoughts).build();
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
+        } catch (Exception e) { throw new AiServiceException("Could not rank job candidates",e); }
     }
 
-    public void autoApply(AgentAutoApplyRequest request) {
-        UUID userId = SecurityUtils.getCurrentUserId();
-        
-        for (AgentResearchResponse.RankedJob rj : request.getJobs()) {
-            UUID jobId;
-            if ("Internal".equalsIgnoreCase(rj.getSource())) {
-                // If internal, try to find it (using a simplified search or just create if missing)
-                jobId = jobRepository.findTop5ByUserIdOrderByEmbedding(userId, embeddingService.getEmbedding(rj.getTitle() + " " + rj.getCompany()))
-                        .stream()
-                        .filter(j -> j.getTitle().equalsIgnoreCase(rj.getTitle()) && j.getCompany().equalsIgnoreCase(rj.getCompany()))
-                        .findFirst()
-                        .map(Job::getId)
-                        .orElseGet(() -> createNewJob(userId, rj).getId());
-            } else {
-                // If Web, check if we already saved it by ID to avoid vector column issues
-                jobId = jobRepository.findIdByUserIdAndSourceUrl(userId, rj.getUrl())
-                        .orElseGet(() -> createNewJob(userId, rj).getId());
+    @org.springframework.transaction.annotation.Transactional
+    public void saveJobs(AgentAutoApplyRequest request) {
+        UUID userId=SecurityUtils.getCurrentUserId();
+        if(request.getResumeId()!=null) resumeRepository.findByIdAndUserId(request.getResumeId(),userId)
+                .orElseThrow(()->new com.jobpilot.common.exception.ResourceNotFoundException("Resume","id",request.getResumeId()));
+        applicationRepository.lockOwner(userId);
+        for(var ranked:request.getJobs()) {
+            Job job;
+            if(ranked.getId()!=null) job=jobRepository.findByIdAndUserId(ranked.getId(),userId)
+                    .orElseThrow(()->new com.jobpilot.common.exception.ResourceNotFoundException("Job","id",ranked.getId()));
+            else {
+                if("Internal".equalsIgnoreCase(ranked.getSource())) throw new com.jobpilot.common.exception.BadRequestException("Run research again to select an internal job by its saved ID");
+                job=createNewJob(userId,ranked);
             }
-            
-            // 2. Create Application
-            JobApplication application = JobApplication.builder()
-                    .userId(userId)
-                    .jobId(jobId)
-                    .resumeId(request.getResumeId())
-                    .company(rj.getCompany())
-                    .position(rj.getTitle())
-                    .status(JobApplication.ApplicationStatus.APPLIED)
-                    .appliedDate(java.time.LocalDate.now())
-                    .source("Agent Auto-Apply")
-                    .notes("Automatically applied via Autonomous Job Researcher. Match Score: " + rj.getMatchScore() + "%")
-                    .build();
-            
-            applicationRepository.save(application);
+            if(applicationRepository.existsByUserIdAndJobId(userId,job.getId())) continue;
+            applicationRepository.save(JobApplication.builder().userId(userId).jobId(job.getId()).resumeId(request.getResumeId())
+                    .company(Objects.toString(job.getCompany(),ranked.getCompany())).position(Objects.toString(job.getTitle(),ranked.getTitle()))
+                    .status(JobApplication.ApplicationStatus.SAVED).source("Job Research")
+                    .notes("Saved for review. No application has been submitted.").build());
         }
     }
-
-    private Job createNewJob(UUID userId, AgentResearchResponse.RankedJob rj) {
-        Job job = Job.builder()
-                .userId(userId)
-                .title(rj.getTitle())
-                .company(rj.getCompany())
-                .location(rj.getLocation())
-                .sourceUrl(rj.getUrl())
-                .rawText(rj.getDescription() != null ? rj.getDescription() : rj.getMatchReason())
-                .embedding(embeddingService.getEmbedding(rj.getTitle() + " " + rj.getCompany() + " " + rj.getDescription()))
-                .build();
-        return jobRepository.save(job);
+    private Job createNewJob(UUID user,AgentResearchResponse.RankedJob ranked) {
+        UUID id=jobWriter.save(Job.builder().userId(user).title(ranked.getTitle()).company(ranked.getCompany())
+                .location(ranked.getLocation()).sourceUrl(ranked.getUrl()).rawText(Objects.toString(ranked.getDescription(),""))
+                .build());
+        return jobRepository.findByIdAndUserId(id,user).orElseThrow();
     }
 
     private String truncate(String text, int maxLength) {

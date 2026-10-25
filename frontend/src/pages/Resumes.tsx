@@ -1,27 +1,27 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { Resume } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import ResumeDraftDialog from '@/components/resume/ResumeDraftDialog';
+import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle2, Download, Trash2, Edit3, Save, AlertCircle, Sparkles, Eye, User, Mail, Briefcase, GraduationCap, Code, Layout } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AtsAnalysisView } from '@/components/resume/AtsAnalysisView';
-import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
+import { useToast } from '@/hooks/use-toast';
 import { useApiCall } from '@/hooks/useApiCall';
+import api from '@/lib/api';
+import { Resume } from '@/types';
+import { Briefcase,CheckCircle2,Code,Download,Edit3,Eye,FileText,GraduationCap,Layout,Mail,Save,Sparkles,Trash2,Upload,User } from 'lucide-react';
+import { useEffect,useRef,useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Resumes() {
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -32,8 +32,10 @@ export default function Resumes() {
   const [skillsText, setSkillsText] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [tailoringResume, setTailoringResume] = useState<Resume | null>(null);
-  const [jobDescription, setJobDescription] = useState('');
-  const [isTailoring, setIsTailoring] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const draftSourceId = searchParams.get('source');
+  const [linkedSource, setLinkedSource] = useState<Resume | null>(null);
+  const initialDraftId = searchParams.get('draft') || undefined;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -43,6 +45,17 @@ export default function Resumes() {
   useEffect(() => {
     fetchResumes();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLinkedSource(null);
+    if (draftSourceId) {
+      api.get(`/api/v1/resumes/${draftSourceId}`).then(response => {
+        if (!cancelled) setLinkedSource(response.data.data);
+      }).catch(() => { if (!cancelled) toast({ title: 'Resume unavailable', description: 'This resume may have been deleted.', variant: 'destructive' }); });
+    }
+    return () => { cancelled = true; };
+  }, [draftSourceId, toast]);
 
   const fetchResumes = async () => {
     await execute(
@@ -74,7 +87,7 @@ export default function Resumes() {
         title: editingResume.title,
         tags: editingResume.tags
       });
-      toast({ title: 'Success', description: 'Resume updated successfully.' });
+      toast({ title: 'Success', description: 'Saved a separate version. Your original resume is unchanged.' });
       setEditingResume(null);
       fetchResumes();
     } catch (error) {
@@ -175,53 +188,6 @@ export default function Resumes() {
     }
   };
 
-  const handleTailorDownload = async () => {
-    if (!tailoringResume || !jobDescription.trim()) {
-      toast({ title: 'Error', description: 'Please provide a job description.', variant: 'destructive' });
-      return;
-    }
-    
-    setIsTailoring(true);
-    try {
-      const response = await api.post(`/api/v1/resumes/${tailoringResume.id}/tailor-and-download`, 
-        { jobDescription },
-        { responseType: 'blob' }
-      );
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `tailored_resume_${tailoringResume.title}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTailoringResume(null);
-      setJobDescription('');
-      toast({ title: 'Success', description: 'Tailored PDF downloaded successfully.' });
-      fetchResumes();
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to generate tailored PDF.', variant: 'destructive' });
-    } finally {
-      setIsTailoring(false);
-    }
-  };
-
-  const runAtsAnalysis = async (id: string) => {
-    try {
-      const response = await api.post(`/api/v1/resumes/${id}/analyze-ats`);
-      toast({ title: 'Analysis Complete', description: 'ATS compatibility has been evaluated.' });
-      
-      // Update the editing resume if it's the one we just analyzed
-      if (editingResume && editingResume.id === id) {
-        setEditingResume(response.data.data);
-      }
-      
-      fetchResumes();
-    } catch (error) {
-      console.error('ATS Analysis failed', error);
-      toast({ title: 'Analysis Failed', description: 'Failed to perform ATS analysis.', variant: 'destructive' });
-    }
-  };
-
   if (isLoading) return <LoadingSpinner size="md" message="Loading resumes..." className="py-8" />;
 
   return (
@@ -275,6 +241,7 @@ export default function Resumes() {
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">v{resume.version}</Badge>
+                  {resume.parentResumeId && <Badge variant="secondary">Separate version</Badge>}
                   {resume.atsScore !== undefined && (
                     <Badge className={resume.atsScore >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : resume.atsScore >= 60 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'}>
                       ATS: {resume.atsScore}
@@ -296,7 +263,7 @@ export default function Resumes() {
                     <Button variant="outline" size="sm" onClick={() => downloadPdf(resume.id)} title="Download PDF">
                       <Download className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setTailoringResume(resume)} title="Tailor & Export PDF" className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                    <Button variant="outline" size="sm" onClick={() => setTailoringResume(resume)} title="Tailor and review versions" className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
                       <Sparkles className="h-4 w-4" />
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => deleteResume(resume.id)} className="text-destructive hover:bg-destructive/10">
@@ -329,7 +296,7 @@ export default function Resumes() {
           <DialogHeader>
             <DialogTitle>Edit Extracted Information</DialogTitle>
             <DialogDescription>
-              Review and refine the information extracted from your resume.
+              Review and refine the information extracted from your resume. Saving creates a separate version and preserves this original.
             </DialogDescription>
           </DialogHeader>
           
@@ -659,7 +626,7 @@ export default function Resumes() {
               {isSaving ? 'Saving...' : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save Changes
+                  Save New Version
                 </>
               )}
             </Button>
@@ -667,55 +634,14 @@ export default function Resumes() {
         </DialogContent>
       </Dialog>
 
-      {/* Tailor & Export Dialog */}
-      <Dialog open={!!tailoringResume} onOpenChange={(open) => !open && setTailoringResume(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-500" />
-              Dynamic Tailoring Engine
-            </DialogTitle>
-            <DialogDescription>
-              Paste the target job description below. Our AI will dynamically re-write and re-order your resume ({tailoringResume?.title}) to highlight the most relevant skills and experiences, then export it as a clean, ATS-friendly PDF.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="job-description" className="font-bold">Target Job Description</Label>
-              <Textarea 
-                id="job-description"
-                placeholder="Paste the full job description here..."
-                className="min-h-[250px] resize-none border-slate-300 focus-visible:ring-indigo-500"
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                disabled={isTailoring}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTailoringResume(null)} disabled={isTailoring}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleTailorDownload} 
-              disabled={isTailoring || !jobDescription.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              {isTailoring ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2 text-white" />
-                  Generating & Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Tailor & Export PDF
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {(tailoringResume || linkedSource) && (
+        <ResumeDraftDialog
+          key={tailoringResume?.id || draftSourceId}
+          resume={(tailoringResume || linkedSource)!}
+          initialDraftId={tailoringResume ? undefined : initialDraftId}
+          onClose={() => { setTailoringResume(null); setSearchParams({}); void fetchResumes(); }}
+        />
+      )}
 
       {/* Resume Viewer Dialog */}
       <Dialog open={!!viewingResume} onOpenChange={(open) => !open && setViewingResume(null)}>

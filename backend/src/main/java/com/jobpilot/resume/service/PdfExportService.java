@@ -46,6 +46,7 @@ public class PdfExportService {
                 appendIfPresent(contactLine, personalInfo, "phone");
                 appendIfPresent(contactLine, personalInfo, "location");
                 appendIfPresent(contactLine, personalInfo, "linkedin");
+                appendIfPresent(contactLine, personalInfo, "website");
 
                 if (!contactLine.isEmpty()) {
                     Paragraph contactPara = new Paragraph(contactLine.toString().trim(), SMALL_FONT);
@@ -82,11 +83,14 @@ public class PdfExportService {
                     } else if (exp.containsKey("duration") && exp.get("duration") != null) {
                         dates = (String) exp.get("duration");
                     } else {
-                        dates = "Present";
+                        dates = "";
                     }
 
                     Paragraph titlePara = new Paragraph(title + "  |  " + company, SUBHEADING_FONT);
                     document.add(titlePara);
+                    if (exp.get("location") instanceof String location && !location.isBlank()) {
+                        document.add(new Paragraph(location, SMALL_FONT));
+                    }
 
                     Paragraph datesPara = new Paragraph(dates, SMALL_FONT);
                     datesPara.setSpacingAfter(4);
@@ -128,6 +132,9 @@ public class PdfExportService {
                     Paragraph instPara = new Paragraph(institution + "  |  " + dates, SMALL_FONT);
                     instPara.setSpacingAfter(6);
                     document.add(instPara);
+                    if (edu.get("gpa") instanceof String gpa && !gpa.isBlank()) {
+                        document.add(new Paragraph("GPA: " + gpa, SMALL_FONT));
+                    }
                 }
                 document.add(Chunk.NEWLINE);
             }
@@ -149,6 +156,9 @@ public class PdfExportService {
                     String projDesc = (String) proj.getOrDefault("description", "");
                     document.add(new Paragraph(projName, SUBHEADING_FONT));
                     document.add(new Paragraph(projDesc, BODY_FONT));
+                    if (proj.get("url") instanceof String url && !url.isBlank()) {
+                        document.add(new Paragraph(url, SMALL_FONT));
+                    }
                     List<String> tech = (List<String>) proj.get("technologies");
                     if (tech != null && !tech.isEmpty()) {
                         Paragraph techPara = new Paragraph("Technologies: " + String.join(", ", tech), SMALL_FONT);

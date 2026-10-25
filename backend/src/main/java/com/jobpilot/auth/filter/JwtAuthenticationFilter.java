@@ -1,6 +1,7 @@
 package com.jobpilot.auth.filter;
 
 import com.jobpilot.common.util.JwtUtil;
+import com.jobpilot.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(
@@ -37,21 +39,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = extractToken(request);
 
-        if (token != null && jwtUtil.isTokenValid(token)) {
+        if (token != null && jwtUtil.isAccessTokenValid(token)) {
             try {
-                String email = jwtUtil.extractEmail(token);
                 UUID userId = jwtUtil.extractUserId(token);
-                String role = jwtUtil.extractRole(token);
-
-                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
-
-                var authentication = new UsernamePasswordAuthenticationToken(
-                        new AuthenticatedUser(userId, email, role),
-                        null,
-                        authorities
-                );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                userRepository.findById(userId)
+                        .filter(user -> Boolean.TRUE.equals(user.getEnabled()))
+                        .ifPresent(user -> {
+                            var authentication = new UsernamePasswordAuthenticationToken(
+                                    new AuthenticatedUser(userId, user.getEmail(), user.getRole()), null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole())));
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        });
             } catch (Exception e) {
                 log.debug("Failed to set authentication from JWT: {}", e.getMessage());
             }

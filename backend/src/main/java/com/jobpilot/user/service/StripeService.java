@@ -21,7 +21,7 @@ public class StripeService {
 
     private final UserRepository userRepository;
 
-    @Value("${stripe.api.key:sk_test_mockKeyForLocalDevelopment123}")
+    @Value("${stripe.api.key:}")
     private String stripeApiKey;
 
     @Value("${app.frontend.url:http://localhost:5173}")

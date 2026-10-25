@@ -29,11 +29,16 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final AiService aiService;
+    private final JobWriter jobWriter;
 
     @Transactional
     public JobDTO analyzeJob(JobAnalysisRequest request) {
         UUID userId = SecurityUtils.getCurrentUserId();
 
+        if (request.getUrl() != null && !request.getUrl().isBlank() && !request.getUrl().trim().equals("#")) {
+            var existing = jobRepository.findFirstByUserIdAndSourceUrlOrderByCreatedAtAsc(userId, request.getUrl().trim());
+            if (existing.isPresent()) return toDTO(existing.get());
+        }
         String rawText = resolveJobText(request);
 
         // Parse JD using AI
@@ -58,11 +63,11 @@ public class JobService {
                 .skillsNice(toStringArray(parsedJson.get("niceToHaveSkills")))
                 .build();
 
-        job = jobRepository.save(job);
+        UUID savedId = jobWriter.save(job);
+        job = jobRepository.findByIdAndUserId(savedId, userId).orElseThrow();
         log.info("Job analyzed and saved: id={}, title={}", job.getId(), title);
 
-        // Trigger async embedding
-        aiService.embedJobAsync(job.getId(), rawText);
+        // The database queues embedding work in the same transaction as the job.
 
         return toDTO(job);
     }

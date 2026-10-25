@@ -32,7 +32,7 @@ public class AgentController {
     public ResponseEntity<ApiResponse<AgentDtos.OrchestrationResponse>> orchestrate(
             @Valid @RequestBody AgentDtos.OrchestrationRequest request) {
         AgentDtos.OrchestrationResponse response = orchestrator.orchestrate(request);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Workflow completed"));
+        return ResponseEntity.ok(ApiResponse.ok(response, "COMPLETED".equals(response.getStatus()) ? "Workflow completed" : "Workflow failed"));
     }
 
     // ─── Multi-Agent Orchestration (SSE Streaming) ───
@@ -70,10 +70,17 @@ public class AgentController {
     }
 
     @PostMapping("/auto-apply")
-    @Operation(summary = "Auto-apply to selected jobs")
+    @Operation(summary = "Unavailable: automatic submission is not implemented", deprecated = true)
     public ResponseEntity<ApiResponse<Void>> autoApply(
             @RequestBody AgentAutoApplyRequest request) {
-        agentService.autoApply(request);
-        return ResponseEntity.ok(ApiResponse.ok(null, "Auto-apply process completed"));
+        throw new com.jobpilot.common.exception.FeatureUnavailableException(
+                "Automatic submission is not available. Save jobs for review, then apply on the employer's site.");
+    }
+
+    @PostMapping("/save-jobs")
+    @Operation(summary = "Save selected jobs to the application tracker without submitting them")
+    public ResponseEntity<ApiResponse<Void>> saveJobs(@Valid @RequestBody AgentAutoApplyRequest request) {
+        agentService.saveJobs(request);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Jobs saved for review. No applications were submitted."));
     }
 }

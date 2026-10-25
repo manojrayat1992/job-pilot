@@ -1,30 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { 
-  Mail, 
-  Lock, 
-  User, 
-  ArrowRight, 
-  Rocket, 
-  CheckCircle2,
-  Sparkles,
-  ShieldCheck,
-  Zap,
-  ArrowLeft,
-  Terminal,
-  Activity,
-  Cpu,
-  Settings,
-  Shield
-} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FormInput } from '@/components/ui/FormInput';
-import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/authStore';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence,motion,useMotionValue,useSpring } from 'framer-motion';
+import {
+Activity,
+ArrowLeft,
+ArrowRight,
+Cpu,
+Lock,
+Mail,
+Rocket,
+Settings,
+Shield,
+ShieldCheck,
+Sparkles,
+User,
+Zap
+} from 'lucide-react';
+import React,{ useEffect,useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useLocation,useNavigate } from 'react-router-dom';
+import * as z from 'zod';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),

@@ -17,17 +17,11 @@ import com.jobpilot.resume.entity.Resume;
 import com.jobpilot.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -45,21 +39,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AiService {
 
-    private final ChatClient.Builder chatClientBuilder;
+    private final ChatGenerationService chatGenerationService;
+    private final AudioService audioService;
     private final EmbeddingService embeddingService;
     private final ResumeRepository resumeRepository;
     private final JobRepository jobRepository;
     private final ConversationHistoryRepository historyRepository;
     private final AiLogRepository aiLogRepository;
-    private final ModelRoutingService routingService;
-    private final CreditService creditService;
     private final ObjectMapper objectMapper;
     private final ResourceLoader resourceLoader;
-    private final RestTemplate restTemplate = new RestTemplate();
-
-    @Value("${spring.ai.openai.api-key:}")
-    private String openAiApiKey;
-
     private record ModelResult(String content, String modelName) {}
 
     // ================================================================
@@ -184,7 +172,7 @@ public class AiService {
                 .requestContent(request)
                 .responseContent(response)
                 .scoreJump(scoreJump)
-                .provider("Managed")
+                .provider("Groq")
                 .model(modelVersion)
                 .latencyMs(latency)
                 .promptTokens(promptTokens)
@@ -238,6 +226,8 @@ public class AiService {
             ));
             ModelResult aiResult = callAi(prompt);
             return parseJsonResponse(aiResult.content());
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to tailor resume: {}", e.getMessage(), e);
             throw new AiServiceException("Failed to tailor resume for the job.", e);
@@ -257,6 +247,8 @@ public class AiService {
             ));
             ModelResult aiResult = callAi(prompt);
             return parseJsonResponse(aiResult.content());
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
         } catch (Exception e) {
             log.error("AI form field mapping failed: {}", e.getMessage(), e);
             return Map.of();
@@ -327,69 +319,11 @@ public class AiService {
     // ================================================================
 
     public String transcribeAudio(MultipartFile audioFile) {
-        if (openAiApiKey == null || openAiApiKey.isBlank()) {
-            log.warn("OpenAI API key not configured, returning mock transcription.");
-            return "This is a simulated transcription because the OpenAI API key is missing.";
-        }
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            headers.setBearerAuth(openAiApiKey);
-
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            body.add("file", audioFile.getResource());
-            body.add("model", "whisper-1");
-
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    "https://api.openai.com/v1/audio/transcriptions",
-                    requestEntity,
-                    Map.class
-            );
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return (String) response.getBody().get("text");
-            }
-        } catch (Exception e) {
-            log.error("Failed to transcribe audio: {}", e.getMessage());
-        }
-        return "I could not hear that clearly. Could you repeat?";
+        return audioService.transcribe(audioFile);
     }
 
     public byte[] generateSpeech(String text) {
-        if (openAiApiKey == null || openAiApiKey.isBlank()) {
-            log.warn("OpenAI API key not configured, returning null for speech.");
-            return null;
-        }
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(openAiApiKey);
-
-            Map<String, Object> body = Map.of(
-                    "model", "tts-1",
-                    "input", text,
-                    "voice", "alloy"
-            );
-
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<byte[]> response = restTemplate.postForEntity(
-                    "https://api.openai.com/v1/audio/speech",
-                    requestEntity,
-                    byte[].class
-            );
-
-            if (response.getStatusCode().is2xxSuccessful()) {
-                return response.getBody();
-            }
-        } catch (Exception e) {
-            log.error("Failed to generate speech: {}", e.getMessage());
-        }
-        return null;
+        return audioService.speak(text);
     }
 
     /**
@@ -422,6 +356,7 @@ public class AiService {
 
     public void submitFeedback(AiFeedbackRequest request) {
         AiLog logEntry = aiLogRepository.findById(request.getAiLogId())
+                .filter(entry -> SecurityUtils.getCurrentUserId().equals(entry.getUserId()))
                 .orElseThrow(() -> new ResourceNotFoundException("AiLog", "id", request.getAiLogId()));
         
         logEntry.setRating(request.getRating());
@@ -435,53 +370,18 @@ public class AiService {
     // Async Embedding Operations
     // ================================================================
 
-    @Async
-    public void embedResumeAsync(UUID resumeId, String text) {
-        try {
-            embeddingService.embedAndStoreResume(resumeId, text);
-            log.info("Resume embedding completed: {}", resumeId);
-        } catch (Exception e) {
-            log.error("Failed to embed resume {}: {}", resumeId, e.getMessage(), e);
-        }
-    }
-
-    @Async
-    public void embedJobAsync(UUID jobId, String text) {
-        try {
-            embeddingService.embedAndStoreJob(jobId, text);
-            log.info("Job embedding completed: {}", jobId);
-        } catch (Exception e) {
-            log.error("Failed to embed job {}: {}", jobId, e.getMessage(), e);
-        }
-    }
-
     // ================================================================
     // Internal Helpers
     // ================================================================
 
     private ModelResult callAi(String promptText) {
-        // Enforce credit quota before making the LLM call
-        creditService.requireCredits();
-
         try {
-            com.jobpilot.ai.entity.ModelVersion targetModel = routingService.getTargetModel();
-            log.debug("Using AI Model: {}", targetModel.getVersionName());
+            var result = chatGenerationService.generate(promptText);
 
-            ChatClient chatClient = chatClientBuilder.build();
-            String response = chatClient.prompt()
-                    .user(promptText)
-                    .call()
-                    .content();
-            
-            if (response == null || response.isBlank()) {
-                throw new AiServiceException("AI returned an empty response");
-            }
-
-            // Consume one credit on success
-            creditService.consumeCredit();
-
-            return new ModelResult(response, targetModel.getVersionName());
+            return new ModelResult(result.content(), result.model());
         } catch (AiServiceException e) {
+            throw e;
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
             throw e;
         } catch (Exception e) {
             log.error("AI service call failed: {}", e.getMessage(), e);
@@ -507,7 +407,7 @@ public class AiService {
     }
 
     private Map<String, Object> parseJsonResponse(String response) {
-        return com.jobpilot.common.util.JsonExtractor.extractJson(response);
+        return com.jobpilot.common.util.JsonExtractor.extractRequiredJson(response);
     }
 
     private String escapeInternalNewlines(String json) {

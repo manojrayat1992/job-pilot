@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final com.jobpilot.ai.service.CreditService creditService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -31,7 +32,7 @@ public class AuthService {
 
     @Transactional
     public TokenResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(request.getEmail().toLowerCase().trim())) {
             throw new DuplicateResourceException("Email already registered: " + request.getEmail());
         }
 
@@ -42,7 +43,7 @@ public class AuthService {
                 .role("USER")
                 .build();
 
-        user = userRepository.save(user);
+        user = userRepository.saveAndFlush(user);
         log.info("User registered: {}", user.getEmail());
 
         return buildTokenResponse(user);
@@ -67,13 +68,16 @@ public class AuthService {
     public TokenResponse refresh(RefreshRequest request) {
         String refreshToken = request.getRefreshToken();
 
-        if (!jwtUtil.isTokenValid(refreshToken)) {
+        if (!jwtUtil.isRefreshTokenValid(refreshToken)) {
             throw new BadCredentialsException("Invalid or expired refresh token");
         }
 
-        String email = jwtUtil.extractEmail(refreshToken);
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findById(jwtUtil.extractUserId(refreshToken))
                 .orElseThrow(() -> new BadCredentialsException("User not found"));
+
+        if (!Boolean.TRUE.equals(user.getEnabled())) {
+            throw new BadCredentialsException("Account is disabled");
+        }
 
         log.info("Token refreshed for user: {}", user.getEmail());
         return buildTokenResponse(user);
@@ -89,8 +93,7 @@ public class AuthService {
         user.setResetTokenExpiry(java.time.LocalDateTime.now().plusHours(1));
         userRepository.save(user);
 
-        // In a real app, send an email. For now, we log it.
-        log.info("PASSWORD RESET TOKEN for {}: {}", email, token);
+        // Reset delivery is not exposed until a real email provider is integrated.
     }
 
     @Transactional
@@ -128,7 +131,7 @@ public class AuthService {
                         .targetRole(user.getTargetRole())
                         .currentOrg(user.getCurrentOrg())
                         .targetSalary(user.getTargetSalary())
-                        .credits(user.getCredits())
+                        .credits(creditService.getRemainingCredits(user.getId()))
                         .build())
                 .build();
     }

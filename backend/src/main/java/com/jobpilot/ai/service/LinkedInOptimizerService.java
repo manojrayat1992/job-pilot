@@ -7,8 +7,6 @@ import com.jobpilot.common.util.JsonExtractor;
 import com.jobpilot.common.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -23,14 +21,12 @@ import java.util.*;
 @RequiredArgsConstructor
 public class LinkedInOptimizerService {
 
-    private final ChatClient.Builder chatClientBuilder;
-    private final CreditService creditService;
+    private final ChatGenerationService chatGenerationService;
     private final AiLogRepository aiLogRepository;
 
     public Map<String, Object> optimizeProfile(String headline, String summary,
                                                 String experience, String targetRole) {
         UUID userId = SecurityUtils.getCurrentUserId();
-        creditService.requireCredits();
 
         String prompt = String.format("""
                 You are a LinkedIn optimization expert who helps professionals maximize recruiter visibility.
@@ -68,20 +64,10 @@ public class LinkedInOptimizerService {
 
         long startTime = System.currentTimeMillis();
         try {
-            ChatClient client = chatClientBuilder
-                    .defaultOptions(OpenAiChatOptions.builder()
-                            .withMaxTokens(2000)
-                            .withTemperature(0.6)
-                            .build())
-                    .build();
+            var generation = chatGenerationService.generateFeature("linkedin_optimizer", AgentPersonality.GHOSTWRITER.getSystemPrompt(), prompt, 2000, 0.6);
+            String response = generation.content();
 
-            String response = client.prompt()
-                    .system(AgentPersonality.GHOSTWRITER.getSystemPrompt())
-                    .user(prompt)
-                    .call().content();
-
-            creditService.consumeCredit();
-            Map<String, Object> result = JsonExtractor.extractJson(response);
+            Map<String, Object> result = JsonExtractor.extractRequiredJson(response);
 
             // Log AI Usage & Persist Optimization
             try {
@@ -91,8 +77,8 @@ public class LinkedInOptimizerService {
                         .promptTemplate("linkedin-optimize")
                         .requestContent(prompt)
                         .responseContent(response)
-                        .provider("OpenAI")
-                        .model(AgentPersonality.GHOSTWRITER.getPreferredModel())
+                        .provider("Groq")
+                        .model(generation.model())
                         .latencyMs(System.currentTimeMillis() - startTime)
                         .status("SUCCESS")
                         .build();
@@ -103,10 +89,11 @@ public class LinkedInOptimizerService {
             }
 
             return result;
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
         } catch (Exception e) {
             log.error("LinkedIn optimization failed: {}", e.getMessage());
-            return Map.of("error", "Unable to optimize profile. Please try again.",
-                    "rawResponse", true);
+            throw new com.jobpilot.common.exception.AiServiceException("AI generation failed", e);
         }
     }
 }

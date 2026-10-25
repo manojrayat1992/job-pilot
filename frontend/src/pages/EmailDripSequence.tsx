@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import api from '@/lib/api';
+import { AiFeedback } from '@/components/ai/AiFeedback';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { AiFeedback } from '@/components/ai/AiFeedback';
-import { Mail, ArrowLeft, Loader2, Send, Clock, Linkedin } from 'lucide-react';
+import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import { ArrowLeft,Clock,Linkedin,Loader2,Mail,Send } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function EmailDripSequence() {
@@ -25,7 +25,7 @@ export default function EmailDripSequence() {
       setResult(res.data.data);
     } catch (error: any) {
       if (error.response?.status === 402) {
-        toast({ title: 'Credits Exhausted', description: 'Upgrade to Pro for unlimited AI access.', variant: 'destructive' });
+        toast({ title: 'Credits Exhausted', description: 'Paid upgrades are currently unavailable.', variant: 'destructive' });
       } else {
         toast({ title: 'Generation Failed', description: 'Please try again.', variant: 'destructive' });
       }

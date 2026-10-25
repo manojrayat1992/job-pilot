@@ -59,6 +59,7 @@ public class User {
 
     @Column(nullable = false)
     @Builder.Default
+    // Initial/legacy balance only. Spendable credits live in ai_credit_accounts after V19.
     private Integer credits = 5;
 
     @Column(name = "onboarding_completed", nullable = false)

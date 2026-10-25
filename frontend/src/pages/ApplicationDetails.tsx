@@ -1,31 +1,28 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card,CardContent } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
 import { JobApplication } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { 
-  ArrowLeft, 
-  Building2, 
-  Calendar, 
-  MapPin, 
-  Mail, 
-  User, 
-  Link2, 
-  Trash2, 
-  Edit3,
-  ExternalLink,
-  Loader2,
-  FileText,
-  Clock,
-  Sparkles,
-  ChevronRight,
-  Target,
-  MessageSquare,
-  ShieldCheck
+import {
+ArrowLeft,
+Building2,
+Calendar,
+ChevronRight,
+Clock,
+Edit3,
+FileText,
+Mail,
+MapPin,
+MessageSquare,
+ShieldCheck,
+Sparkles,
+Target,
+Trash2,
+User
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useEffect,useState } from 'react';
+import { useNavigate,useParams } from 'react-router-dom';
 
 const STAGES = [
   { id: 'SAVED', label: 'Draft' },

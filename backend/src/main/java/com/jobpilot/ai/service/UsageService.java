@@ -1,80 +1,47 @@
 package com.jobpilot.ai.service;
 
-import com.jobpilot.ai.entity.AiLog;
-import com.jobpilot.ai.repository.AiLogRepository;
 import com.jobpilot.common.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import java.util.*;
-import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UsageService {
-
-    private final AiLogRepository aiLogRepository;
+    private final JdbcTemplate jdbc;
     private final CreditService creditService;
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Map<String, Object> getUserUsageStats() {
-        UUID userId = SecurityUtils.getCurrentUserId();
-
-        // Get total remaining credits
-        int credits = creditService.getRemainingCredits();
-
-        // Get recent AI activity
-        List<AiLog> recentLogs = aiLogRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
-
-        // Map logs to a clean DTO list
-        List<Map<String, Object>> activityLog = recentLogs.stream().map(log -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", log.getId());
-            map.put("feature", log.getFeature() != null ? log.getFeature() : "General AI");
-            map.put("model", log.getModel());
-            int prompt = log.getPromptTokens() != null ? log.getPromptTokens() : 0;
-            int completion = log.getCompletionTokens() != null ? log.getCompletionTokens() : 0;
-            map.put("tokensUsed", prompt + completion);
-            map.put("durationMs", log.getLatencyMs());
-            map.put("timestamp", log.getCreatedAt().toString());
-            map.put("status", log.getStatus() != null ? log.getStatus() : "SUCCESS");
-            return map;
-        }).collect(Collectors.toList());
-
-        // Get aggregate usage stats per model
-        List<Object[]> modelStatsRaw = aiLogRepository.findUsageStatsByUserId(userId);
-        List<Map<String, Object>> modelStats = new ArrayList<>();
-        
-        long totalTokensAllTime = 0;
-        long totalRequestsAllTime = 0;
-
-        for (Object[] row : modelStatsRaw) {
-            String model = (String) row[0];
-            long reqCount = ((Number) row[1]).longValue();
-            long tokens = row[2] != null ? ((Number) row[2]).longValue() : 0;
-            
-            totalTokensAllTime += tokens;
-            totalRequestsAllTime += reqCount;
-
-            modelStats.add(Map.of(
-                    "model", model != null ? model : "Unknown",
-                    "requestCount", reqCount,
-                    "tokensUsed", tokens
-            ));
-        }
-
-        return Map.of(
-                "credits", Map.of(
-                        "remaining", credits,
-                        "isUnlimited", credits == Integer.MAX_VALUE
-                ),
-                "summary", Map.of(
-                        "totalTokens", totalTokensAllTime,
-                        "totalRequests", totalRequestsAllTime
-                ),
-                "modelStats", modelStats,
-                "recentActivity", activityLog
-        );
+        UUID user = SecurityUtils.getCurrentUserId();
+        int remaining = creditService.getRemainingCredits();
+        var summary = jdbc.queryForMap("""
+            SELECT count(*) AS "totalRequests", coalesce(sum(prompt_tokens+completion_tokens),0) AS "totalTokens",
+              count(*) FILTER(WHERE status='SETTLED' AND (prompt_tokens IS NULL OR completion_tokens IS NULL)) AS "unknownTokenRequests",
+              coalesce(sum(credits) FILTER(WHERE status='RESERVED'),0) AS "reservedCredits",
+              coalesce(sum(credits) FILTER(WHERE status='SETTLED'),0) AS "chargedCredits",
+              count(*) FILTER(WHERE status='RESERVED' AND created_at < now()-interval '10 minutes') AS "unresolvedRequests"
+            FROM ai_credit_ledger WHERE user_id=?
+            """, user);
+        var models = jdbc.queryForList("""
+            SELECT coalesce(model,requested_model) AS model, count(*) AS "requestCount",
+              coalesce(sum(prompt_tokens+completion_tokens),0) AS "tokensUsed",
+              count(*) FILTER(WHERE status='SETTLED' AND (prompt_tokens IS NULL OR completion_tokens IS NULL)) AS "unknownTokenRequests"
+            FROM ai_credit_ledger WHERE user_id=? GROUP BY coalesce(model,requested_model) ORDER BY count(*) DESC
+            """, user);
+        var activity = jdbc.queryForList("""
+            SELECT id, feature, coalesce(model,requested_model) AS model, prompt_tokens+completion_tokens AS "tokensUsed",
+              duration_ms AS "durationMs", created_at AS timestamp,
+              CASE WHEN status='RESERVED' AND created_at < now()-interval '10 minutes' THEN 'UNKNOWN' ELSE status END AS status,
+              CASE WHEN status='SETTLED' THEN credits ELSE 0 END AS "chargedCredits",
+              CASE WHEN status='RESERVED' THEN credits ELSE 0 END AS "reservedCredits", resolution
+            FROM ai_credit_ledger WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 20
+            """, user);
+        return Map.of("credits", Map.of("remaining", remaining, "isUnlimited", remaining == Integer.MAX_VALUE,
+                        "reserved", summary.get("reservedCredits")),
+                "summary", summary, "modelStats", models, "recentActivity", activity);
     }
 }

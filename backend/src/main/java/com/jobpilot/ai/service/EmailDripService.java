@@ -14,8 +14,6 @@ import com.jobpilot.resume.entity.Resume;
 import com.jobpilot.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -30,16 +28,14 @@ import java.util.*;
 @RequiredArgsConstructor
 public class EmailDripService {
 
-    private final ChatClient.Builder chatClientBuilder;
+    private final ChatGenerationService chatGenerationService;
     private final ResumeRepository resumeRepository;
-    private final CreditService creditService;
     private final EmailSequenceRepository emailSequenceRepository;
     private final EmailSequenceStepRepository emailSequenceStepRepository;
     private final AiLogRepository aiLogRepository;
 
     public AgentDtos.OutreachResponse generateSequence(AgentDtos.OutreachRequest request) {
         UUID userId = SecurityUtils.getCurrentUserId();
-        creditService.requireCredits();
 
         String resumeContext = "";
         if (request.getResumeId() != null) {
@@ -87,27 +83,17 @@ public class EmailDripService {
         UUID aiLogId = null;
 
         try {
-            ChatClient client = chatClientBuilder
-                    .defaultOptions(OpenAiChatOptions.builder()
-                            .withMaxTokens(2500)
-                            .withTemperature(0.7)
-                            .build())
-                    .build();
+            var generation = chatGenerationService.generateFeature("email_drip", AgentPersonality.OUTREACH.getSystemPrompt(), prompt, 2500, 0.7);
+            String response = generation.content();
 
-            String response = client.prompt()
-                    .system(AgentPersonality.OUTREACH.getSystemPrompt())
-                    .user(prompt)
-                    .call().content();
-
-            creditService.consumeCredit();
-            Map<String, Object> parsed = JsonExtractor.extractJson(response);
+            Map<String, Object> parsed = JsonExtractor.extractRequiredJson(response);
 
             // Log AI usage
             long latency = System.currentTimeMillis() - startTime;
             AiLog aiLog = AiLog.builder()
                     .userId(userId)
-                    .provider("Managed")
-                    .model("llama-3.1-8b-instant")
+                    .provider("Groq")
+                    .model(generation.model())
                     .feature("email_drip")
                     .promptTemplate("email-drip-sequence")
                     .requestContent(prompt)
@@ -191,12 +177,11 @@ public class EmailDripService {
                     .tips(toStringList(parsed.get("tips")))
                     .aiLogId(aiLogId)
                     .build();
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Email drip generation failed: {}", e.getMessage());
-            return AgentDtos.OutreachResponse.builder()
-                    .body("Unable to generate sequence. Please try again.")
-                    .tips(List.of("Personalize every email", "Provide value before asking"))
-                    .build();
+            throw new com.jobpilot.common.exception.AiServiceException("AI generation failed", e);
         }
     }
 

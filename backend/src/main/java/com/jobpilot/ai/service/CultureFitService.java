@@ -10,8 +10,6 @@ import com.jobpilot.user.entity.User;
 import com.jobpilot.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -25,15 +23,13 @@ import java.util.*;
 @RequiredArgsConstructor
 public class CultureFitService {
 
-    private final ChatClient.Builder chatClientBuilder;
+    private final ChatGenerationService chatGenerationService;
     private final UserRepository userRepository;
-    private final CreditService creditService;
     private final CultureFitAssessmentRepository cultureFitAssessmentRepository;
     private final ObjectMapper objectMapper;
 
     public Map<String, Object> assessCultureFit(String companyName, String userValues) {
         UUID userId = SecurityUtils.getCurrentUserId();
-        creditService.requireCredits();
 
         // Pull user onboarding data for context
         User user = userRepository.findById(userId).orElse(null);
@@ -79,20 +75,10 @@ public class CultureFitService {
                 companyName);
 
         try {
-            ChatClient client = chatClientBuilder
-                    .defaultOptions(OpenAiChatOptions.builder()
-                            .withMaxTokens(2500)
-                            .withTemperature(0.5)
-                            .build())
-                    .build();
+            var generation = chatGenerationService.generateFeature("culture_fit", AgentPersonality.ANALYST.getSystemPrompt(), prompt, 2500, 0.5);
+            String response = generation.content();
 
-            String response = client.prompt()
-                    .system(AgentPersonality.ANALYST.getSystemPrompt())
-                    .user(prompt)
-                    .call().content();
-
-            creditService.consumeCredit();
-            Map<String, Object> resultMap = JsonExtractor.extractJson(response);
+            Map<String, Object> resultMap = JsonExtractor.extractRequiredJson(response);
 
             // Persist the assessment results to database
             try {
@@ -118,10 +104,11 @@ public class CultureFitService {
             }
 
             return resultMap;
+        } catch (com.jobpilot.common.exception.CreditExhaustedException | com.jobpilot.common.exception.CreditConflictException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Culture fit assessment failed: {}", e.getMessage());
-            return Map.of("error", "Unable to assess culture fit. Please try again.",
-                    "overallScore", 0, "rawResponse", true);
+            throw new com.jobpilot.common.exception.AiServiceException("AI generation failed", e);
         }
     }
 }

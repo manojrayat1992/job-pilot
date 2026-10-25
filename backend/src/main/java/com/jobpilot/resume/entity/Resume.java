@@ -42,11 +42,11 @@ public class Resume {
     @Builder.Default
     private Boolean isActive = false;
 
-    @Column(name = "raw_text", columnDefinition = "TEXT")
+    @Column(name = "raw_text", columnDefinition = "TEXT", updatable = false)
     private String rawText;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "parsed_json", columnDefinition = "jsonb")
+    @Column(name = "parsed_json", columnDefinition = "jsonb", updatable = false)
     private Map<String, Object> parsedJson;
 
     @Column(name = "file_path")
@@ -72,11 +72,18 @@ public class Resume {
     @Column(name = "tags", columnDefinition = "TEXT[]")
     private String[] tags;
 
-    @Column(name = "embedding", columnDefinition = "vector(1536)")
-    private float[] embedding;
 
     @Column(name = "template_id")
     private UUID templateId;
+
+    @Column(name = "parent_resume_id")
+    private UUID parentResumeId;
+
+    @Column(name = "target_job_id")
+    private UUID targetJobId;
+
+    @Column(name = "target_job_description", columnDefinition = "TEXT")
+    private String targetJobDescription;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

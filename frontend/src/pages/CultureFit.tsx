@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Building2, ArrowLeft, Loader2, HeartHandshake, AlertTriangle, CheckCircle } from 'lucide-react';
+import api from '@/lib/api';
 import { motion } from 'framer-motion';
+import { AlertTriangle,ArrowLeft,CheckCircle,HeartHandshake,Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function CultureFit() {
@@ -24,7 +24,7 @@ export default function CultureFit() {
       setResult(res.data.data);
     } catch (error: any) {
       if (error.response?.status === 402) {
-        toast({ title: 'Credits Exhausted', description: 'Upgrade to Pro.', variant: 'destructive' });
+        toast({ title: 'Credits Exhausted', description: 'Paid upgrades are currently unavailable.', variant: 'destructive' });
       } else {
         toast({ title: 'Failed', description: 'Please try again.', variant: 'destructive' });
       }

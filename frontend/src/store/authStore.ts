@@ -1,13 +1,15 @@
+import { API_BASE_URL } from '@/lib/config';
+import axios from 'axios';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import axios from 'axios';
 
-const API_URL = 'http://localhost:8080/api/v1/auth';
+const API_URL = `${API_BASE_URL}/api/v1/auth`;
 
 interface User {
   id: string;
   email: string;
   name: string;
+  role: string;
   onboardingCompleted: boolean;
   workMode?: string;
   targetRole?: string;
@@ -43,12 +45,13 @@ export const useAuthStore = create<AuthState>()(
           id: data.user.id,
           email: data.user.email,
           name: data.user.fullName,
+          role: data.user.role,
           onboardingCompleted: data.user.onboardingCompleted,
           workMode: data.user.workMode,
           targetRole: data.user.targetRole,
           currentOrg: data.user.currentOrg,
           targetSalary: data.user.targetSalary,
-          credits: data.user.credits || 0
+          credits: data.user.credits ?? 0
         };
         
         set({ 
@@ -70,8 +73,9 @@ export const useAuthStore = create<AuthState>()(
           id: data.user.id,
           email: data.user.email,
           name: data.user.fullName,
+          role: data.user.role,
           onboardingCompleted: data.user.onboardingCompleted || false,
-          credits: data.user.credits || 5
+          credits: data.user.credits ?? 0
         };
         
         set({ 

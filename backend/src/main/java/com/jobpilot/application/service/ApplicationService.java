@@ -25,10 +25,18 @@ import java.util.UUID;
 public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
+    private final com.jobpilot.resume.repository.ResumeRepository resumeRepository;
+    private final com.jobpilot.job.repository.JobRepository jobRepository;
 
     @Transactional
     public ApplicationDTO create(CreateApplicationRequest request) {
         UUID userId = SecurityUtils.getCurrentUserId();
+        validateReferences(request, userId);
+        applicationRepository.lockOwner(userId);
+        if (request.getJobId() != null) {
+            var existing = applicationRepository.findFirstByUserIdAndJobIdOrderByCreatedAtAsc(userId, request.getJobId());
+            if (existing.isPresent()) return toDTO(existing.get());
+        }
 
         JobApplication app = JobApplication.builder()
                 .userId(userId)
@@ -72,6 +80,13 @@ public class ApplicationService {
     @Transactional
     public ApplicationDTO update(UUID id, CreateApplicationRequest request) {
         JobApplication app = findByIdAndCurrentUser(id);
+        validateReferences(request, SecurityUtils.getCurrentUserId());
+        applicationRepository.lockOwner(SecurityUtils.getCurrentUserId());
+        if (request.getJobId() != null && !request.getJobId().equals(app.getJobId())) {
+            var existing = applicationRepository.findFirstByUserIdAndJobIdOrderByCreatedAtAsc(app.getUserId(), request.getJobId());
+            if (existing.isPresent() && !existing.get().getId().equals(id))
+                throw new com.jobpilot.common.exception.DuplicateResourceException("This job already has an application record");
+        }
 
         if (request.getCompany() != null) app.setCompany(request.getCompany().trim());
         if (request.getPosition() != null) app.setPosition(request.getPosition().trim());
@@ -128,6 +143,17 @@ public class ApplicationService {
                 .total(total)
                 .byStatus(byStatus)
                 .build();
+    }
+
+    private void validateReferences(CreateApplicationRequest request, UUID userId) {
+        if (request.getResumeId() != null) {
+            resumeRepository.findByIdAndUserId(request.getResumeId(), userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Resume", "id", request.getResumeId()));
+        }
+        if (request.getJobId() != null) {
+            jobRepository.findByIdAndUserId(request.getJobId(), userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Job", "id", request.getJobId()));
+        }
     }
 
     private JobApplication findByIdAndCurrentUser(UUID id) {

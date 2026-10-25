@@ -23,6 +23,22 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(com.jobpilot.ai.workflow.WorkflowConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleWorkflowConflict(com.jobpilot.ai.workflow.WorkflowConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(CreditConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCreditConflict(CreditConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(FeatureUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnavailable(FeatureUnavailableException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)

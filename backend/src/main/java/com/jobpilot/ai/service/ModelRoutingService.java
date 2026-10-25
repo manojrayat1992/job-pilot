@@ -24,28 +24,23 @@ public class ModelRoutingService {
     public ModelVersion getTargetModel() {
         List<ModelVersion> activeVersions = modelVersionRepository.findByIsActiveTrue();
         
-        if (activeVersions.isEmpty()) {
-            log.error("CRITICAL: No active model versions found in database.");
-            throw new RuntimeException("AI Infrastructure Error: No active model.");
+        long totalWeight = 0;
+        for (ModelVersion version : activeVersions) {
+            if (version.getTrafficWeight() == null || version.getTrafficWeight() < 0
+                    || version.getModelPath() == null || version.getModelPath().isBlank()) {
+                throw new com.jobpilot.common.exception.FeatureUnavailableException("AI model routing is misconfigured");
+            }
+            totalWeight += version.getTrafficWeight();
         }
-
-        if (activeVersions.size() == 1) {
-            return activeVersions.get(0);
+        if (totalWeight == 0) {
+            throw new com.jobpilot.common.exception.FeatureUnavailableException("No AI model is enabled for traffic");
         }
-
-        // Weighted Random Selection
-        int totalWeight = activeVersions.stream().mapToInt(ModelVersion::getTrafficWeight).sum();
-        int roll = random.nextInt(totalWeight);
-        
-        int currentSum = 0;
+        long roll = random.nextLong(totalWeight);
+        long currentSum = 0;
         for (ModelVersion version : activeVersions) {
             currentSum += version.getTrafficWeight();
-            if (roll < currentSum) {
-                log.debug("Routing request to model: {} (weight: {})", version.getVersionName(), version.getTrafficWeight());
-                return version;
-            }
+            if (roll < currentSum) return version;
         }
-
-        return activeVersions.get(0);
+        throw new IllegalStateException("AI routing weights changed during selection");
     }
 }

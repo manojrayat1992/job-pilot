@@ -1,31 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { ResumeTemplate, ApiResponse } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from '@/components/ui/badge';
-import { 
-  ArrowLeft, 
-  Layout, 
-  Check, 
-  Sparkles, 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Briefcase, 
-  GraduationCap, 
-  Code,
-  Save,
-  Download,
-  Trash2
-} from 'lucide-react';
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
-import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
+import api from '@/lib/api';
+import { ApiResponse,ResumeTemplate } from '@/types';
+import {
+ArrowLeft,
+Download,
+Layout,
+Mail,
+MapPin,
+Phone,
+Save,
+Trash2
+} from 'lucide-react';
+import { useEffect,useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function ResumeBuilder() {
   const [step, setStep] = useState<'template' | 'content'>('template');
@@ -74,14 +68,15 @@ export default function ResumeBuilder() {
     if (!selectedTemplate) return;
     setIsSaving(true);
     try {
+      const { summary, ...personalInfo } = resumeData.personalInfo;
       await api.post('/api/v1/resumes', {
         title: resumeData.title,
         parsedJson: {
-          personalInfo: resumeData.personalInfo,
+          personalInfo,
           experience: resumeData.experience,
           education: resumeData.education,
           skills: resumeData.skills,
-          summary: resumeData.personalInfo.summary
+          summary
         },
         templateId: selectedTemplate.id
       });

@@ -1,25 +1,25 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
+import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
 import { Button } from '@/components/ui/button';
+import { Card,CardContent,CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Briefcase, 
-  MapPin, 
-  DollarSign, 
-  Building, 
-  ChevronRight, 
-  ChevronLeft, 
-  Sparkles,
-  Rocket,
-  ShieldCheck,
-  Zap
+import api from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import {
+Briefcase,
+Building,
+ChevronLeft,
+ChevronRight,
+DollarSign,
+MapPin,
+Rocket,
+ShieldCheck,
+Sparkles,
+Zap
 } from 'lucide-react';
-import { LoadingSpinner } from '@/components/loading/LoadingSpinner';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Onboarding() {
   const [step, setStep] = useState(1);
@@ -39,6 +39,10 @@ export default function Onboarding() {
   const handleBack = () => setStep(prev => prev - 1);
 
   const handleSubmit = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await api.post('/api/v1/users/onboarding', formData);
