@@ -45,6 +45,7 @@ class SecurityBoundaryTest {
             GlobalExceptionHandler.class, com.jobpilot.ai.controller.CreditAdminController.class, Probe.class})
     static class Config {
         @Bean JwtUtil jwtUtil() { return new JwtUtil("test-only-signing-key-at-least-32-bytes-long", 900000, 604800000); }
+        @Bean com.jobpilot.auth.service.AuthSessionService sessions() { return mock(com.jobpilot.auth.service.AuthSessionService.class); }
         @Bean UserRepository users() { return mock(UserRepository.class); }
         @Bean ResumeRepository resumes() { return mock(ResumeRepository.class); }
         @Bean com.jobpilot.ai.service.CreditService credits() { return mock(com.jobpilot.ai.service.CreditService.class); }
@@ -59,6 +60,7 @@ class SecurityBoundaryTest {
 
     @Autowired WebApplicationContext context;
     @Autowired JwtUtil jwt;
+    @Autowired com.jobpilot.auth.service.AuthSessionService sessions;
     @Autowired UserRepository users;
     @Autowired ResumeRepository resumes;
     @Autowired AiService ai;
@@ -68,7 +70,8 @@ class SecurityBoundaryTest {
     UUID resumeId;
 
     @BeforeEach void setUp() {
-        reset(users, resumes, ai, credits);
+        reset(users, resumes, ai, credits, sessions);
+        when(sessions.isActive(any(), any())).thenReturn(true);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         user = User.builder().id(UUID.randomUUID()).email("candidate@example.test").role("USER").build();
         resumeId = UUID.randomUUID();
@@ -128,6 +131,18 @@ class SecurityBoundaryTest {
         user.setRole("ADMIN");
         mvc.perform(get("/api/v1/ai/admin/models").header("Authorization", "Bearer " + token()))
                 .andExpect(status().isOk());
+    }
+
+    @Test void revokedSessionCannotAccessResources() throws Exception {
+        when(sessions.isActive(any(), any())).thenReturn(false);
+        mvc.perform(get("/api/v1/ai/admin/models").header("Authorization", "Bearer " + token()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test void sessionStoreFailureDoesNotAuthenticate() throws Exception {
+        when(sessions.isActive(any(), any())).thenThrow(new IllegalStateException("Database unavailable"));
+        mvc.perform(get("/api/v1/ai/admin/models").header("Authorization", "Bearer " + token()))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test void disabledAccountCannotUseAnExistingAccessToken() throws Exception {

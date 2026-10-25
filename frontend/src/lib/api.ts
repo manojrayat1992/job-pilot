@@ -12,48 +12,68 @@ const api = axios.create({
 
 import { useAuthStore } from '@/store/authStore';
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = useAuthStore.getState().accessToken;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+import { withAuthLock } from './authLock';
+import { refreshSession } from './sessionCoordinator';
 
-// Response interceptor to handle token refresh
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    expectedSessionKey?: string | null;
+  }
+  interface InternalAxiosRequestConfig {
+    _retry?: boolean;
+    _authSessionKey?: string | null;
+    _authAccessToken?: string | null;
+  }
+}
+
+api.interceptors.request.use(async (config) => {
+  await useAuthStore.persist.rehydrate();
+  const state = useAuthStore.getState();
+  if ((config.expectedSessionKey !== undefined && config.expectedSessionKey !== state.sessionKey)
+      || (config._retry && config._authSessionKey !== state.sessionKey)) {
+    throw new Error('Your login changed. Please try again.');
+  }
+  config._authSessionKey = state.sessionKey;
+  config._authAccessToken = state.accessToken;
+  if (state.accessToken) config.headers.Authorization = `Bearer ${state.accessToken}`;
+  else delete config.headers.Authorization;
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry
+        && originalRequest._authSessionKey && originalRequest._authAccessToken) {
       originalRequest._retry = true;
-
       try {
-        const refreshToken = useAuthStore.getState().refreshToken;
-        if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {
-            refreshToken,
-          });
-
-          const { accessToken, refreshToken: newRefreshToken, user: refreshedUser } = response.data.data;
-          const user = useAuthStore.getState().user;
-          if (user) {
-             useAuthStore.getState().setAuth({ ...user, role: refreshedUser.role, credits: refreshedUser.credits }, accessToken, newRefreshToken);
-          }
-
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return api(originalRequest);
-        }
+        await refreshSession(originalRequest._authSessionKey, originalRequest._authAccessToken, {
+          lock: (action) => withAuthLock(async () => {
+            await useAuthStore.persist.rehydrate();
+            return action();
+          }),
+          read: () => {
+            // localStorage rehydration is synchronous; also catches cross-tab changes while awaiting HTTP.
+            void useAuthStore.persist.rehydrate();
+            return useAuthStore.getState();
+          },
+          exchange: async (refreshToken) => {
+            if (!navigator.locks) throw new Error('Automatic renewal requires HTTPS and Web Locks. Sign in again.');
+            const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, { refreshToken }, { timeout: 15000 });
+            const { accessToken, refreshToken: replacement, user } = response.data.data;
+            return { ...useAuthStore.getState(), accessToken, refreshToken: replacement,
+              user: { ...user, name: user.fullName } };
+          },
+          write: (session) => {
+            if (!session.user) throw new Error('Missing user');
+            useAuthStore.getState().setAuth(session.user, session.accessToken!, session.refreshToken!);
+          },
+          clear: () => useAuthStore.getState().clearAuth(),
+        });
+        return api(originalRequest);
       } catch (refreshError) {
-        useAuthStore.getState().logout();
-        window.location.href = '/login';
+        if (!useAuthStore.getState().sessionKey) window.location.assign('/login');
         return Promise.reject(refreshError);
       }
     }

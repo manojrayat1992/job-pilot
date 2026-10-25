@@ -3,7 +3,6 @@ package com.jobpilot.auth.service;
 import com.jobpilot.auth.dto.*;
 import com.jobpilot.common.exception.BadRequestException;
 import com.jobpilot.common.exception.DuplicateResourceException;
-import com.jobpilot.common.util.JwtUtil;
 import com.jobpilot.user.entity.User;
 import com.jobpilot.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +24,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final com.jobpilot.ai.service.CreditService creditService;
     private final PasswordEncoder passwordEncoder;
-    private final JwtUtil jwtUtil;
+    private final AuthSessionService sessions;
 
     @Value("${app.jwt.access-token-expiration-ms}")
     private long accessTokenExpirationMs;
@@ -46,7 +45,7 @@ public class AuthService {
         user = userRepository.saveAndFlush(user);
         log.info("User registered: {}", user.getEmail());
 
-        return buildTokenResponse(user);
+        return buildTokenResponse(user, sessions.create(user));
     }
 
     public TokenResponse login(LoginRequest request) {
@@ -62,26 +61,18 @@ public class AuthService {
         }
 
         log.info("User logged in: {}", user.getEmail());
-        return buildTokenResponse(user);
+        return buildTokenResponse(user, sessions.create(user));
     }
 
     public TokenResponse refresh(RefreshRequest request) {
-        String refreshToken = request.getRefreshToken();
-
-        if (!jwtUtil.isRefreshTokenValid(refreshToken)) {
-            throw new BadCredentialsException("Invalid or expired refresh token");
-        }
-
-        User user = userRepository.findById(jwtUtil.extractUserId(refreshToken))
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
-
-        if (!Boolean.TRUE.equals(user.getEnabled())) {
-            throw new BadCredentialsException("Account is disabled");
-        }
-
-        log.info("Token refreshed for user: {}", user.getEmail());
-        return buildTokenResponse(user);
+        var tokens = sessions.rotate(request.getRefreshToken());
+        User user = userRepository.findById(tokens.userId())
+                .orElseThrow(() -> new BadCredentialsException("Account unavailable"));
+        return buildTokenResponse(user, tokens);
     }
+
+    public void logout(RefreshRequest request) { sessions.logout(request.getRefreshToken()); }
+    public void logoutAll() { sessions.logoutAll(com.jobpilot.common.util.SecurityUtils.getCurrentUserId()); }
 
     @Transactional
     public void forgotPassword(String email) {
@@ -101,7 +92,7 @@ public class AuthService {
         User user = userRepository.findByResetToken(token)
                 .orElseThrow(() -> new BadRequestException("Invalid or expired reset token"));
 
-        if (user.getResetTokenExpiry().isBefore(java.time.LocalDateTime.now())) {
+        if (user.getResetTokenExpiry() == null || !user.getResetTokenExpiry().isAfter(java.time.LocalDateTime.now())) {
             throw new BadRequestException("Reset token has expired");
         }
 
@@ -112,13 +103,11 @@ public class AuthService {
         log.info("Password reset successful for user: {}", user.getEmail());
     }
 
-    private TokenResponse buildTokenResponse(User user) {
-        String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), user.getRole());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getId(), user.getEmail());
+    private TokenResponse buildTokenResponse(User user, AuthSessionService.Tokens tokens) {
 
         return TokenResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
+                .accessToken(tokens.accessToken())
+                .refreshToken(tokens.refreshToken())
                 .tokenType("Bearer")
                 .expiresIn(accessTokenExpirationMs / 1000)
                 .user(TokenResponse.UserInfo.builder()

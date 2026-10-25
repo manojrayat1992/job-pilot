@@ -40,4 +40,15 @@ public class AuthController {
         TokenResponse response = authService.refresh(request);
         return ResponseEntity.ok(ApiResponse.ok(response, "Token refreshed"));
     }
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request);
+        return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/logout-all")
+    public ApiResponse<Void> logoutAll() {
+        authService.logoutAll();
+        return ApiResponse.ok(null);
+    }
 }

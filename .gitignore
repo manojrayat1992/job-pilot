@@ -33,3 +33,7 @@ uploads/
 
 ## Node (if frontend added later)
 node_modules/
+
+# Generated frontend output
+dist/
+*.tsbuildinfo

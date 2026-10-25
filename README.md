@@ -8,7 +8,7 @@ Start with the [project assessment](docs/PROJECT-ASSESSMENT.md) for the technica
 
 - Job research saves selected jobs as **SAVED**. It does not submit applications to employers.
 - Email synchronization, hiring-contact discovery/unlock, extension autofill, and paid upgrades are disabled until their real integrations are implemented and verified.
-- AI-generated text needs user review. Reviewed resume versions are implemented; live quality evaluation, durable embedding delivery, reliable credit accounting, live provider evaluation, automatic workflow recovery and cancellation remain open work. Agent Command Center history and user-triggered step recovery are implemented; see [saved workflows](docs/WORKFLOW-PERSISTENCE.md).
+- AI-generated text needs user review. Reviewed resume versions are implemented; live provider quality evaluation, automatic workflow recovery and cancellation remain open work. Durable embedding delivery and atomic app-credit accounting are implemented; provider currency accounting remains open. Agent Command Center history and user-triggered step recovery are implemented; see [saved workflows](docs/WORKFLOW-PERSISTENCE.md).
 - Redis, Playwright, and Stripe dependencies are present; their presence does not establish a working production integration.
 
 ## Reviewed resume versions
@@ -71,13 +71,14 @@ mvn verify
 From `frontend`:
 
 ```sh
+npm test
 npm run lint
 npm run build
 ```
 
-The frontend does not currently define an `npm test` script. Lint has known warnings; they are documented in the stabilization notes. Backend tests cover service logic, provider contracts with mocked responses, and Spring MVC security/SSE behavior. Set `JOBPILOT_REVIEW_DB_URL` to an empty disposable PostgreSQL database to include the database integration tests; see the stabilization notes. No live AI provider test is implied.
+`npm test` runs the refresh-session coordination tests with Node.js 22.6 or newer. Lint has known warnings; they are documented in the stabilization notes. Backend tests cover service logic, provider contracts with mocked responses, and Spring MVC security/SSE behavior. Set `JOBPILOT_REVIEW_DB_URL` to an empty disposable PostgreSQL database to include the database integration tests; see the stabilization notes. No live AI provider test is implied.
 
-GitHub Actions runs backend verification and frontend installation, lint, and build. The workflow still needs its first remote execution after the changes are pushed.
+GitHub Actions runs backend verification and frontend installation, tests, lint, and build. The workflow still needs its first remote execution after the changes are pushed.
 
 ## Packaging
 
@@ -94,3 +95,5 @@ No license grant is established here; add an appropriate license file before dis
 AI calls now use the [credit accounting ledger](docs/CREDIT-ACCOUNTING.md): one app credit per successful chat/audio call, atomic reservations, refunds for provider errors, and reusable workflow responses. V19 moves spendable balances into `ai_credit_accounts`; `users.credits` is retained only as the legacy/initial balance. Unresolved calls require operator reconciliation. Provider currency costs and paid upgrades are still unavailable.
 
 Search now reads the same embedding tables used by ingestion. [Search integrity](docs/SEARCH-INTEGRITY.md) describes V20's durable indexing queue, retry/status endpoints, concurrent job/tracker save guards and source-backed research IDs. V20 queues existing sources for rebuilding, so deploy matching backend/frontend with old workers stopped and allow time for indexing. The Jobs page shows preparation status and retry controls.
+
+Authentication now uses persisted sessions and single-use refresh tokens. Logout revokes the current session; **Sign out all devices** revokes every session for that account. V21 and the matching frontend require all existing users to sign in again. Serve the UI over HTTPS (localhost is supported for development); automatic refresh requires browser Web Locks to coordinate tabs. See [authentication session security](docs/AUTH-SESSION-SECURITY.md) for API behavior, deployment steps and remaining risks.

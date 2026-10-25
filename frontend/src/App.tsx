@@ -35,10 +35,10 @@ import ErrorBoundary from '@/components/error/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuthStore();
+  const { user, accessToken, sessionKey } = useAuthStore();
   const location = window.location.pathname;
   
-  if (!user) return <Navigate to="/login" />;
+  if (!user || !accessToken || !sessionKey) return <Navigate to="/login" />;
   
   if (!user.onboardingCompleted && location !== '/onboarding') {
     return <Navigate to="/onboarding" />;

@@ -35,7 +35,7 @@ import static org.mockito.Mockito.*;
 class CreditAccountJpaTest {
     @Configuration @EnableTransactionManagement
     @EnableJpaRepositories(basePackageClasses=UserRepository.class)
-    @Import({CreditService.class,AuthService.class,UserService.class})
+    @Import({CreditService.class,AuthService.class,UserService.class,com.jobpilot.auth.service.AuthSessionService.class})
     static class Config {
         @Bean DataSource dataSource() { return new DriverManagerDataSource(System.getenv("JOBPILOT_REVIEW_DB_URL"),"review_test","local_review_test_only"); }
         @Bean JdbcTemplate jdbc(DataSource ds) { return new JdbcTemplate(ds); }

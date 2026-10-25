@@ -30,6 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+    private final com.jobpilot.auth.service.AuthSessionService sessions;
 
     @Override
     protected void doFilterInternal(
@@ -42,7 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null && jwtUtil.isAccessTokenValid(token)) {
             try {
                 UUID userId = jwtUtil.extractUserId(token);
-                userRepository.findById(userId)
+                if (sessions.isActive(jwtUtil.extractSessionId(token), userId)) userRepository.findById(userId)
                         .filter(user -> Boolean.TRUE.equals(user.getEnabled()))
                         .ifPresent(user -> {
                             var authentication = new UsernamePasswordAuthenticationToken(

@@ -1,7 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
 import { Activity,Bot,Briefcase,CheckSquare,FileText,LayoutDashboard,LogOut,Sparkles,Zap } from 'lucide-react';
-import { ReactNode } from 'react';
+import api from '@/lib/api';
+import { withAuthLock } from '@/lib/authLock';
+import { useToast } from '@/hooks/use-toast';
+import { ReactNode, useState } from 'react';
 import { NavLink,useLocation,useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
@@ -13,9 +16,29 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const [signingOut, setSigningOut] = useState(false);
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    setSigningOut(true);
+    try { await logout(); }
+    catch { toast({ title: 'Signed out locally', description: 'Server logout was not confirmed. Check your connection.', variant: 'destructive' }); }
+    finally { setSigningOut(false); if (!useAuthStore.getState().sessionKey) navigate('/login'); }
+  };
+
+  const handleLogoutAll = async () => {
+    const expected = useAuthStore.getState().sessionKey;
+    setSigningOut(true);
+    try {
+      await api.post('/api/v1/auth/logout-all', null, { expectedSessionKey: expected });
+      await withAuthLock(async () => {
+        await useAuthStore.persist.rehydrate();
+        if (useAuthStore.getState().sessionKey === expected) useAuthStore.getState().clearAuth();
+      });
+      if (!useAuthStore.getState().sessionKey) navigate('/login');
+    } catch {
+      toast({ title: 'Could not confirm logout on all devices', description: 'Please check your connection and try again.', variant: 'destructive' });
+    } finally { setSigningOut(false); }
   };
 
   const navItems = [
@@ -74,7 +97,8 @@ export default function Layout({ children }: LayoutProps) {
             {user?.onboardingCompleted && (
               <span className="text-sm font-medium hidden sm:inline-block">{user?.name}</span>
             )}
-            <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+            <Button variant="ghost" size="sm" disabled={signingOut} onClick={handleLogoutAll}>Sign out all devices</Button>
+            <Button variant="ghost" size="icon" disabled={signingOut} onClick={handleLogout} title="Logout" aria-label="Sign out">
               <LogOut className="h-5 w-5" />
             </Button>
           </div>

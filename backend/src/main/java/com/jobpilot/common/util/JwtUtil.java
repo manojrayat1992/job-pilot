@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -38,27 +39,46 @@ public class JwtUtil {
     }
 
     public String generateAccessToken(UUID userId, String email, String role) {
+        return generateAccessToken(userId, email, role, UUID.randomUUID());
+    }
+
+    public String generateAccessToken(UUID userId, String email, String role, UUID sessionId) {
         return buildToken(Map.of(
                 "userId", userId.toString(),
                 "type", "access",
+                "sid", sessionId.toString(),
                 "role", role
         ), email, accessTokenExpirationMs);
     }
 
     public String generateRefreshToken(UUID userId, String email) {
-        return buildToken(Map.of(
-                "userId", userId.toString(),
-                "type", "refresh"
-        ), email, refreshTokenExpirationMs);
+        return generateRefreshToken(userId, email, UUID.randomUUID(), new Date(System.currentTimeMillis()+refreshTokenExpirationMs));
     }
 
+    public String generateRefreshToken(UUID userId, String email, UUID sessionId, Date expiresAt) {
+        return buildToken(Map.of("userId", userId.toString(), "type", "refresh", "sid", sessionId.toString()), email, expiresAt);
+    }
+
+    public UUID extractSessionId(String token) {
+        return UUID.fromString(extractClaim(token, claims -> claims.get("sid", String.class)));
+    }
+
+    public long refreshLifetimeMs() { return refreshTokenExpirationMs; }
+
     private String buildToken(Map<String, Object> claims, String subject, long expirationMs) {
+        return buildToken(claims, subject, new Date(System.currentTimeMillis()+expirationMs));
+    }
+
+    private String buildToken(Map<String, Object> claims, String subject, Date expiresAt) {
         Date now = new Date();
         return Jwts.builder()
                 .claims(claims)
+                .id(UUID.randomUUID().toString())
+                .issuer("job-pilot")
+                .claim("aud", "job-pilot-api")
                 .subject(subject)
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + expirationMs))
+                .expiration(expiresAt)
                 .signWith(signingKey)
                 .compact();
     }
@@ -95,15 +115,35 @@ public class JwtUtil {
         return hasValidPurpose(token, "refresh");
     }
 
-    private boolean hasValidPurpose(String token, String purpose) {
+    public record RefreshIdentity(UUID userId, UUID sessionId) {}
+
+    /** Validate and read one claims snapshot, avoiding expiration between successive parses. */
+    public Optional<RefreshIdentity> refreshIdentity(String token) {
         try {
             Claims claims = extractAllClaims(token);
-            UUID.fromString(claims.get("userId", String.class));
-            return purpose.equals(claims.get("type", String.class))
-                    && claims.getSubject() != null && !claims.getSubject().isBlank();
+            if (!hasValidPurpose(claims, "refresh")) return Optional.empty();
+            return Optional.of(new RefreshIdentity(UUID.fromString(claims.get("userId", String.class)),
+                    UUID.fromString(claims.get("sid", String.class))));
+        } catch (JwtException | IllegalArgumentException | NullPointerException e) {
+            return Optional.empty();
+        }
+    }
+
+    private boolean hasValidPurpose(String token, String purpose) {
+        try {
+            return hasValidPurpose(extractAllClaims(token), purpose);
         } catch (JwtException | IllegalArgumentException | NullPointerException e) {
             return false;
         }
+    }
+
+    private boolean hasValidPurpose(Claims claims, String purpose) {
+        UUID.fromString(claims.get("userId", String.class));
+        UUID.fromString(claims.get("sid", String.class));
+        UUID.fromString(claims.getId());
+        return claims.getExpiration() != null && claims.getIssuedAt() != null
+                && purpose.equals(claims.get("type", String.class))
+                && claims.getSubject() != null && !claims.getSubject().isBlank();
     }
 
     public boolean isTokenExpired(String token) {
@@ -120,6 +160,8 @@ public class JwtUtil {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
+                .requireIssuer("job-pilot")
+                .requireAudience("job-pilot-api")
                 .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)

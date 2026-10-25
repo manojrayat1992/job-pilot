@@ -1,3 +1,4 @@
+import { withAuthLock } from '@/lib/authLock';
 import { API_BASE_URL } from '@/lib/config';
 import axios from 'axios';
 import { create } from 'zustand';
@@ -24,20 +25,23 @@ interface AuthState {
   refreshToken: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  sessionKey: string | null;
+  logout: () => Promise<void>;
+  clearAuth: () => void;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
   setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
+      sessionKey: null,
       user: null,
       accessToken: null,
       refreshToken: null,
       
-      login: async (email, password) => {
-        const response = await axios.post(`${API_URL}/login`, { email, password });
+      login: (email, password) => withAuthLock(async () => {
+        const response = await axios.post(`${API_URL}/login`, { email, password }, { timeout: 15000 });
         const data = response.data.data;
         
         // Map backend UserInfo (fullName) to frontend User (name)
@@ -55,18 +59,19 @@ export const useAuthStore = create<AuthState>()(
         };
         
         set({ 
+          sessionKey: crypto.randomUUID(),
           user, 
           accessToken: data.accessToken, 
           refreshToken: data.refreshToken 
         });
-      },
+      }),
 
-      register: async (name, email, password) => {
+      register: (name, email, password) => withAuthLock(async () => {
         const response = await axios.post(`${API_URL}/register`, { 
           fullName: name, // Backend expects fullName
           email, 
           password 
-        });
+        }, { timeout: 15000 });
         const data = response.data.data;
         
         const user: User = {
@@ -79,21 +84,42 @@ export const useAuthStore = create<AuthState>()(
         };
         
         set({ 
+          sessionKey: crypto.randomUUID(),
           user, 
           accessToken: data.accessToken, 
           refreshToken: data.refreshToken 
         });
-      },
+      }),
 
-      logout: () => set({ user: null, accessToken: null, refreshToken: null }),
+      logout: async () => {
+        const expected = get().sessionKey;
+        await withAuthLock(async () => {
+          await useAuthStore.persist.rehydrate();
+          if (get().sessionKey !== expected) return;
+          const refreshToken = get().refreshToken;
+          get().clearAuth();
+          if (refreshToken) await axios.post(`${API_URL}/logout`, { refreshToken }, { timeout: 15000 });
+        });
+      },
+      clearAuth: () => set({ user: null, accessToken: null, refreshToken: null, sessionKey: null }),
       
       setAuth: (user, accessToken, refreshToken) =>
         set({ user, accessToken, refreshToken }),
         
-      setUser: (user) => set({ user }),
+      setUser: (user) => {
+        if (get().sessionKey && get().user?.id === user.id) set({ user });
+      },
     }),
     {
       name: 'auth-storage',
+      version: 1,
+      // Older JWTs have no persisted server session. Require a fresh login after upgrade.
+      migrate: () => ({ user: null, accessToken: null, refreshToken: null, sessionKey: null }),
     }
   )
 );
+
+// Refresh/logout in another tab must update this tab's UI and outgoing credentials.
+window.addEventListener('storage', (event) => {
+  if (event.key === 'auth-storage' || event.key === null) void useAuthStore.persist.rehydrate();
+});
