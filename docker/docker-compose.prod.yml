@@ -1,0 +1,90 @@
+# ============================================================
+# AI Job Pilot — Docker Compose (Production for EC2)
+# ============================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: jobpilot-postgres
+    restart: unless-stopped
+    # Ports are not exposed to the host to keep DB private inside Docker network
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-jobpilot}
+      POSTGRES_USER: ${DB_USERNAME:-jobpilot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-jobpilot} -d ${DB_NAME:-jobpilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: jobpilot-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: jobpilot-backend
+    ports:
+      # Direct access to backend (NO load balancer / reverse proxy)
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-jobpilot}
+      DB_USERNAME: ${DB_USERNAME:-jobpilot}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_TRANSCRIPTION_MODEL: ${OPENAI_TRANSCRIPTION_MODEL:-whisper-1}
+      OPENAI_SPEECH_MODEL: ${OPENAI_SPEECH_MODEL:-tts-1}
+      OPENAI_SPEECH_VOICE: ${OPENAI_SPEECH_VOICE:-alloy}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: jobpilot-frontend
+    restart: unless-stopped
+    ports:
+      # Expose standard HTTP port 80 to the world
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  uploads_data:
+    driver: local

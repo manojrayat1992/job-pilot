@@ -112,10 +112,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: "*"
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
+    threaddump:
+      enabled: true
+    heapdump:
+      enabled: true
 
 # ---- Swagger/OpenAPI ----
 springdoc:

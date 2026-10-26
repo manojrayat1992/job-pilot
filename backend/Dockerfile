@@ -16,8 +16,11 @@ RUN mvn clean package -DskipTests -B
 # Stage 2: Runtime
 # Keep a glibc-based runtime: DJL tokenizers and ONNX load native Linux libraries.
 # Alpine previously failed to load libtokenizers.so (missing libstdc++.so.6).
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jdk
 WORKDIR /app
+
+# Install diagnostic utilities (top, ps, curl)
+RUN apt-get update && apt-get install -y --no-install-recommends procps curl && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN groupadd -r appgroup && useradd -r -g appgroup -m appuser
