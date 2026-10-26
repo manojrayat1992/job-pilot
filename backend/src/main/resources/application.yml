@@ -62,7 +62,7 @@ spring:
     retry:
       max-attempts: 1 # Retries must be visible to the credit ledger and workflow recovery.
     openai:
-      api-key: ${GROQ_API_KEY:}
+      api-key: ${GROQ_API_KEY:placeholder-groq-key}
       base-url: https://api.groq.com/openai
       chat:
         options:

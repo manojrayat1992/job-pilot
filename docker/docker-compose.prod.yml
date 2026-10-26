@@ -7,9 +7,9 @@ services:
     image: pgvector/pgvector:pg16
     container_name: jobpilot-postgres
     restart: unless-stopped
-    # Ports are not exposed to the host to keep DB private inside Docker network
-    expose:
-      - "5432"
+    # Bound only to local EC2 loopback for secure SSH tunneling (pgAdmin)
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: ${DB_NAME:-jobpilot}
       POSTGRES_USER: ${DB_USERNAME:-jobpilot}
@@ -54,8 +54,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-placeholder-groq-key}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-placeholder-openai-key}
       OPENAI_TRANSCRIPTION_MODEL: ${OPENAI_TRANSCRIPTION_MODEL:-whisper-1}
       OPENAI_SPEECH_MODEL: ${OPENAI_SPEECH_MODEL:-tts-1}
       OPENAI_SPEECH_VOICE: ${OPENAI_SPEECH_VOICE:-alloy}
